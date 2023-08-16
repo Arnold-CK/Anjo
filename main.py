@@ -40,6 +40,8 @@ if authentication_status:
             options= ["Sales Analysis", "Costs Analysis"],
             icons=["coin","card-text"],
             orientation="horizontal"
+
+            #use tabs instead
         
     )
         if dashboard_option == "Sales":
