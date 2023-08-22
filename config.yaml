@@ -1,0 +1,22 @@
+credentials:
+  usernames:
+    tony:
+      email: luutuanthony9@gmail.com
+      name: Anthony Luutu
+      password: $2b$12$5H6ma2QfiQzkZY8SXtGM5uYVvWL3UEu1QU1lbJGKU6n7EAyugRJMO
+    andrew:
+      email: amujinya@gmail.com
+      name: Andrew Mujinya
+      password: $2b$12$Gw2ZEW4sXLhiLJaPlK2dpuuqfnWSo89LZoUXyFtV5gqjAMbExf5u2
+    arnold:
+      email: arnoldcyprian@gmail.com
+      name: Arnold Kigonya
+      password: $2b$12$NV95MRxhNUFD2MiAyHP/HeFwwdM94q3XBymov1EPcf/ClOUesbsOu
+cookie:
+  expiry_days: 100
+  key: "A11FD3BB-263D-EB46-9117-61C81836CB3B" # Must be string
+  name: anjoCookie
+preauthorized:
+  emails:
+  - arnold.kigonya96@gmail.com
+
