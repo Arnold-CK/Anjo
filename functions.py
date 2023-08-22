@@ -26,6 +26,23 @@ def switch_page(page_name: str):
     raise ValueError(f"Could not find page {page_name}. Must be one of {page_names}")
 
 
+def get_cost_categories():
+    categories = [
+        "Seeds and Seedlings",
+        "Fertilisers and Nutrients",
+        "Labour and Salaries",
+        "Rent and Lease",
+        "Delivery",
+        "Maintenance and Repair",
+        "Miscellaneous",
+        "Utilities",
+    ]
+
+    categories.sort()
+
+    return categories
+
+
 # def hasher():
 #     hashed_passwords = stauth.Hasher(["tony123", "andrew456", "MIS4l1fe"]).generate()
 #     return hashed_passwords
