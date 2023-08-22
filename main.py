@@ -112,20 +112,20 @@ if authentication_status:
 
                         if not item.strip():
                             is_valid = False
-                            st.error("⚠️ Item cannot be left blank")
+                            st.warning("⚠️ Item cannot be left blank")
 
                         if not category.strip():
                             is_valid = False
-                            st.error("⚠️ Category cannot be left blank")
+                            st.warning("⚠️ Category cannot be left blank")
 
                         if amount.strip():
                             amount = float(amount.strip())
                             if amount <= 0.0:
                                 is_valid = False
-                                st.error("🚨 Please enter an Amount greater than zero")
+                                st.warning("🚨 Please enter an Amount greater than zero")
                         else:
                             is_valid = False
-                            st.error("⚠️ Amount cannot be left blank")
+                            st.warning("⚠️ Amount cannot be left blank")
 
                     if is_valid:
                         st.info("👍 Form is Valid")
