@@ -36,6 +36,7 @@ def get_cost_categories():
         "Maintenance and Repair",
         "Miscellaneous",
         "Utilities",
+        "Giveaway Cost",
     ]
 
     categories.sort()
