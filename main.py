@@ -5,15 +5,19 @@ import gspread
 import streamlit as st
 import streamlit_authenticator as stauth
 import yaml
+from gspread_dataframe import get_as_dataframe
+from millify import millify
 from pytz import timezone
 from streamlit_option_menu import option_menu as option_menu
 from yaml.loader import SafeLoader
+import pandas as pd
+import altair as alt
 
 import functions as fx
 
 # --- PAGE CONFIG ---
 
-st.set_page_config(page_title="Anjo Farms", page_icon="🫑", layout="centered")
+st.set_page_config(page_title="Anjo Farms", page_icon="🫑", layout="wide")
 
 # --- USER AUTHENTICATION ---
 
@@ -31,6 +35,7 @@ authenticator = stauth.Authenticate(
 name, authentication_status, username = authenticator.login("Login", "main")
 
 if authentication_status:
+
     # --- GET DATA & SETUP---
 
     cost_categories = fx.get_cost_categories()
@@ -43,19 +48,120 @@ if authentication_status:
     with st.sidebar:
         nav_bar = option_menu(
             current_user,
-            ["Dashboard", "Data Entry"],
+            ["Costs", "Data Entry"],
             icons=["bar-chart-line", "clipboard-data"],
             menu_icon="person-circle",
         )
 
     # --- DASHBOARDS ---
 
-    if nav_bar == "Dashboard":
-        sales, costs = st.tabs(["🪙 Sales Analysis", "📝 Costs Analysis"])
-        with sales:
-            st.write("Sales dashboard")
-        with costs:
-            st.write("Costs dashboard")
+    if nav_bar == "Costs":
+        details, dashboard = st.tabs(["📝 Details", "💰 Dashboard"])
+
+        anjo_workbook = gc.open_by_key(st.secrets["other_sheet_key"])
+
+        expenses_sheet = anjo_workbook.worksheet("Expenses")
+
+        expenses_df = get_as_dataframe(expenses_sheet, parse_dates=True)
+
+        expenses_df = expenses_df.loc[:, ["data-bio_data-date", "data-bio_data-item",
+                                          "data-bio_data-cost_category",
+                                          "data-bio_data-total_cost", ]].dropna()
+
+        expenses_df["data-bio_data-cost_category"] = expenses_df["data-bio_data-cost_category"].apply(
+            fx.format_column)
+
+        with details:
+
+            st.subheader("Costs by Categories")
+
+            df_cost_categories = expenses_df["data-bio_data-cost_category"].unique()
+            df_cost_categories.sort()
+
+            for category in df_cost_categories:
+                category_df = expenses_df[expenses_df["data-bio_data-cost_category"] == category]
+
+                category_df['data-bio_data-date'] = pd.to_datetime(category_df['data-bio_data-date'])
+
+                category_df = category_df.sort_values(
+                    by="data-bio_data-date", ascending=False
+                )
+
+                category_df["data-bio_data-date"] = category_df["data-bio_data-date"].apply(fx.format_date)
+
+                category_df.rename(columns={
+                    "data-bio_data-date": "Date",
+                    "data-bio_data-item": "Item",
+                    "data-bio_data-cost_category": "Cost Category",
+                    "data-bio_data-total_cost": "Total Cost",
+                }, inplace=True)
+
+                category_df = category_df.reset_index(drop=True)
+                category_df.index += 1
+
+                line_items = len(category_df)
+                total_cost = category_df["Total Cost"].sum()
+                formatted_total_cost = "{:,.0f}".format(total_cost)
+
+                with st.expander(f'{category} - {line_items} line items - {formatted_total_cost} ugx'):
+                    st.dataframe(category_df, use_container_width=True)
+
+        with dashboard:
+
+            total_costs = expenses_df["data-bio_data-total_cost"].sum()
+
+            category_totals = expenses_df.groupby("data-bio_data-cost_category")["data-bio_data-total_cost"].sum()
+
+            category_with_max_total = category_totals.idxmax()
+
+            expenses_df['data-bio_data-date'] = pd.to_datetime(expenses_df['data-bio_data-date'])
+
+            monthly_costs_df = expenses_df.groupby(expenses_df['data-bio_data-date'].dt.strftime('%m'))[
+                'data-bio_data-total_cost'].sum().reset_index()
+
+            monthly_costs_df.columns = ['month', 'total_cost']
+
+            # monthly_costs_totals_df = monthly_costs_df.groupby("month")["data-bio_data-total_cost"].sum()
+
+            # st.dataframe(monthly_costs_df)
+
+            # graph_df = pd.DataFrame(
+            #     {
+            #         "Month": monthly_costs_totals_df["month"],
+            #         "Total Cost": monthly_costs_totals_df,
+            #     }
+            # )
+
+            ttl_costs, biggest_category = st.columns(2)
+
+            with ttl_costs:
+                st.metric(
+                    "Total Costs",
+                    millify(total_costs, precision=2),
+                )
+
+            with biggest_category:
+                st.metric("Most expensive Category", category_with_max_total)
+
+            st.write("---")
+
+            # line = (
+            #     alt.Chart(monthly_costs_df)
+            #     .mark_line()
+            #     .encode(
+            #         x=alt.X("Month:T", timeUnit="month"),
+            #         y=alt.Y("Cost (%):Q"),
+            #     )
+            #     .properties(
+            #         title=alt.TitleParams(
+            #             text="Cost per Month", anchor="middle", fontSize=35
+            #         )
+            #     )
+            # )
+            #
+            # points = line.mark_point()
+            #
+            # st.altair_chart(line + points, use_container_width=True)
 
     # --- DATA ENTRY FORMS ---
 

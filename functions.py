@@ -1,4 +1,5 @@
 import streamlit_authenticator as stauth
+from datetime import datetime
 
 
 def switch_page(page_name: str):
@@ -32,7 +33,7 @@ def get_cost_categories():
         "Fertilisers and Nutrients",
         "Labour and Salaries",
         "Rent and Lease",
-        "Delivery",
+        "Delivery to Customer",
         "Maintenance and Repair",
         "Miscellaneous",
         "Utilities",
@@ -43,6 +44,19 @@ def get_cost_categories():
 
     return categories
 
+
+def format_column(entry):
+    return ' '.join(word.capitalize() for word in entry.split('_'))
+
+
+def format_date(input_date):
+    # Convert the input string to a datetime object
+    # date_object = datetime.strptime(input_date, '%d/%m/%y')
+
+    # Format the datetime object as required (8/Oct/2023)
+    formatted_date = input_date.strftime('%d/%b/%Y')
+
+    return formatted_date
 
 # def hasher():
 #     hashed_passwords = stauth.Hasher(["tony123", "andrew456", "MIS4l1fe"]).generate()
