@@ -12,6 +12,7 @@ credentials:
       email: arnoldcyprian@gmail.com
       name: Arnold Kigonya
       password: $2b$12$NV95MRxhNUFD2MiAyHP/HeFwwdM94q3XBymov1EPcf/ClOUesbsOu
+
 cookie:
   expiry_days: 100
   key: "A11FD3BB-263D-EB46-9117-61C81836CB3B" # Must be string

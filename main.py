@@ -13,12 +13,9 @@ name, authentication_status, username, authenticator = fx.auth()
 
 if authentication_status:
 
-    # cost_categories = fx.get_cost_categories()
     sheet_credentials = st.secrets["sheet_credentials"]
     gc = gspread.service_account_from_dict(sheet_credentials)
     current_user = st.session_state["name"]
-
-    # --- NAVIGATION BAR ---
 
     with st.sidebar:
         nav_bar = option_menu(
@@ -29,15 +26,20 @@ if authentication_status:
         )
 
         with st.expander("Filters"):
-            years, months, cost_categories = fx.show_filters()
+            years, months, cost_categories, start_date, end_date = fx.show_filters()
 
             months = [k for k, v in fx.get_month_name_dict().items() if v in months]
 
-            # date_range = fx.convert_date_range(date_range)
+            if end_date and not start_date:
+                st.error("Cannot have an end date without a start date")
+                st.stop()
+
+            if start_date and end_date:
+                if start_date > end_date:
+                    st.error("Selected start date should be less than the end date")
+                    st.stop()
 
         st.divider()
-
-    # --- DASHBOARDS ---
 
     if nav_bar == "Costs":
         details, dashboard = st.tabs(["📝 Details", "💰 Dashboard"])
@@ -51,11 +53,14 @@ if authentication_status:
         expenses_df = fx.filter_data(expenses_df, 'years', years)
         expenses_df = fx.filter_data(expenses_df, 'months', months)
         expenses_df = fx.filter_data(expenses_df, "cost_categories", cost_categories)
-        # expenses_df = fx.filter_data(expenses_df, "date_range", date_range)
-        # expenses_df = fx.filter_data(expenses_df, 'start_date', start_date)
-        # expenses_df = fx.filter_data(expenses_df, 'end_date', end_date)
+        expenses_df = fx.filter_data(expenses_df, 'start_date', start_date)
+        expenses_df = fx.filter_data(expenses_df, 'end_date', end_date)
 
         with details:
+
+            if expenses_df.empty:
+                st.info("No records match the filtration criteria")
+                st.stop()
 
             st.subheader("Costs by Categories")
 
@@ -85,7 +90,7 @@ if authentication_status:
 
                 number_of_months = expenses_df['data-bio_data-date'].dt.month.nunique()
 
-                average_monthly_cost = total_costs / number_of_months
+                average_monthly_cost = total_costs / number_of_months if number_of_months > 0 else 0
 
                 st.metric("Average monthly Cost", millify(average_monthly_cost, precision=2))
 
