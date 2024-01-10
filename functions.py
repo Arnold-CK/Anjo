@@ -162,37 +162,58 @@ def filter_data(data: pd.DataFrame, filter_name: str, values: List[str]) -> pd.D
     if filter_name == "months":
         data = data[data['data-bio_data-date'].dt.month.isin(values)]
 
-    if filter_name == "date_range":
-        data = data[data['data-bio_data-date']].isin(values)
+    if filter_name == "start_date":
+        date_string = str(values)
+        formatted_start_date = datetime.datetime.strptime(date_string, "%Y-%m-%d").strftime("%d/%m/%Y")
+        data = data[data['data-bio_data-date'] >= formatted_start_date]
+
+    if filter_name == "end_date":
+        date_string = str(values)
+        formatted_start_date = datetime.datetime.strptime(date_string, "%Y-%m-%d").strftime("%d/%m/%Y")
+        data = data[data['data-bio_data-date'] <= formatted_start_date]
 
     return data
 
 
 def show_filters():
     years = st.multiselect("Select Years", get_years_since_2022(),
-                           placeholder="You can choose multiple options", default=datetime.datetime.now().year)
+                           placeholder="You can choose multiple options",
+                           default=datetime.datetime.now().year if st.session_state.date_range_toggle is False else None,
+                           disabled=st.session_state.date_range_toggle)
 
     months = st.multiselect("Select Months", get_month_name_dict().values(),
-                            placeholder="You can choose multiple options")
+                            placeholder="You can choose multiple options",
+                            default=None,
+                            disabled=st.session_state.date_range_toggle)
 
     cost_categories = st.multiselect("Select Categories", get_cost_categories(),
                                      placeholder="You can choose multiple options")
 
-    jan_1 = datetime.date(datetime.date.today().year, 1, 1)
-    dec_31 = datetime.date(datetime.date.today().year, 12, 31)
+    def reset_years_and_months():
+        st.session_state.date_range_toggle = not st.session_state.date_range_toggle
 
-    # date_range = st.date_input("Select a Date Range", value=(jan_1, dec_31),
-    #                            min_value=datetime.date(2022, 8, 1))
+    filter_by_date_range = st.toggle("Filter by date range", value=st.session_state.date_range_toggle,
+                                     on_change=reset_years_and_months)
 
-    # start_date = st.date_input("Start Date (dd/mm/yyyy)", datetime.datetime.now(), format="DD/MM/YYYY",
-    #                            max_value=datetime.datetime.now(),
-    #                            min_value=datetime.date(2022, 8, 1))
-    #
-    # end_date = st.date_input("End Date (dd/mm/yyyy)", datetime.datetime.now(), format="DD/MM/YYYY",
-    #                          max_value=datetime.datetime.now(),
-    #                          min_value=datetime.date(2022, 8, 1))
+    if filter_by_date_range:
+        def set_toggle_to_true():
+            st.session_state.date_range_toggle = True
 
-    return years, months, cost_categories
+        start_date = st.date_input("Start Date (dd/mm/yyyy)", value=None, format="DD/MM/YYYY",
+                                   max_value=datetime.datetime.now(),
+                                   min_value=datetime.date(2022, 8, 1),
+                                   help="Start Date **MUST** be less than/equal to End Date",
+                                   on_change=set_toggle_to_true)
+
+        end_date = st.date_input("End Date (dd/mm/yyyy)", value=None, format="DD/MM/YYYY",
+                                 max_value=datetime.datetime.now(),
+                                 min_value=datetime.date(2022, 8, 1),
+                                 help="End Date **MUST** be greater than/equal to Start Date",
+                                 on_change=set_toggle_to_true)
+
+        return years, months, cost_categories, start_date, end_date
+
+    return years, months, cost_categories, None, None
 
 
 def convert_date_range(date_tuple):
