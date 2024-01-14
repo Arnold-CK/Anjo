@@ -47,7 +47,7 @@ def get_cost_categories():
         "Miscellaneous",
         "Rent & Lease",
         "Seeds & Seedlings",
-        "Tools & Materials",
+        "Tools & Equipment",
         "Transport for Operations",
         "Wages & Salaries",
         "Yaka",
