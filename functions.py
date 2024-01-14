@@ -149,7 +149,9 @@ def display_expander(category, category_df):
     total_cost = category_df["Total Cost"].sum()
     formatted_total_cost = "{:,.0f}".format(total_cost)
 
-    with st.expander(f'{category} - {line_items} line items - {formatted_total_cost} ugx'):
+    line_item_string = "line items" if line_items > 1 else "line_item"
+
+    with st.expander(f'{category} - {line_items} {line_item_string} - {formatted_total_cost} ugx'):
         st.dataframe(category_df, use_container_width=True)
 
 
