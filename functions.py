@@ -38,16 +38,20 @@ def switch_page(page_name: str):
 
 def get_cost_categories():
     categories = [
-        "Seeds And Seedlings",
-        "Fertilisers And Nutrients",
-        "Labour And Salaries",
-        "Rent And Lease",
-        "Delivery",
-        "Maintenance And Repair",
+        "Airtime & Data",
+        "Construction",
+        "Delivery to Customer",
+        "Employee Benefits",
+        "Fertilisers & Nutrients",
+        "Maintenance & Repair",
         "Miscellaneous",
-        "Utilities",
-        "Giveaway Cost",
-        "Construction"
+        "Rent & Lease",
+        "Seeds & Seedlings",
+        "Tools & Materials",
+        "Transport for Operations",
+        "Wages & Salaries",
+        "Yaka",
+        "Supplies & Materials"
     ]
 
     categories.sort()
@@ -114,25 +118,25 @@ def load_expense_data(expenses_sheet):
                                       "data-bio_data-cost_category",
                                       "data-bio_data-total_cost", ]].dropna()
 
-    expenses_df["data-bio_data-cost_category"] = expenses_df["data-bio_data-cost_category"].apply(
-        format_column)
-
-    expenses_df['data-bio_data-date'] = pd.to_datetime(expenses_df['data-bio_data-date'], format='%d/%m/%y')
-
-    return expenses_df
-
-
-def process_category(expenses_df, category):
-    category_df = expenses_df[expenses_df["data-bio_data-cost_category"] == category]
-    category_df = category_df.sort_values(by="data-bio_data-date", ascending=False)
-    category_df["data-bio_data-date"] = category_df["data-bio_data-date"].apply(format_date)
-
-    category_df.rename(columns={
+    expenses_df.rename(columns={
         "data-bio_data-date": "Date",
         "data-bio_data-item": "Item",
         "data-bio_data-cost_category": "Cost Category",
         "data-bio_data-total_cost": "Total Cost",
     }, inplace=True)
+
+    expenses_df["Cost Category"] = expenses_df["Cost Category"].apply(
+        format_column)
+
+    expenses_df['Date'] = pd.to_datetime(expenses_df['Date'], format='%d/%m/%y')
+
+    return expenses_df
+
+
+def process_category(expenses_df, category):
+    category_df = expenses_df[expenses_df["Cost Category"] == category]
+    category_df = category_df.sort_values(by="Date", ascending=False)
+    category_df["Date"] = category_df["Date"].apply(format_date)
 
     category_df = category_df.reset_index(drop=True)
     category_df.index += 1
@@ -154,23 +158,23 @@ def filter_data(data: pd.DataFrame, filter_name: str, values: List[str]) -> pd.D
         return data
 
     if filter_name == "cost_categories":
-        data = data[data["data-bio_data-cost_category"].isin(values)]
+        data = data[data["Cost Category"].isin(values)]
 
     if filter_name == "years":
-        data = data[data['data-bio_data-date'].dt.year.isin(values)]
+        data = data[data['Date'].dt.year.isin(values)]
 
     if filter_name == "months":
-        data = data[data['data-bio_data-date'].dt.month.isin(values)]
+        data = data[data['Date'].dt.month.isin(values)]
 
     if filter_name == "start_date":
         date_string = str(values)
         formatted_start_date = datetime.datetime.strptime(date_string, "%Y-%m-%d").strftime("%d/%m/%Y")
-        data = data[data['data-bio_data-date'] >= formatted_start_date]
+        data = data[data['Date'] >= formatted_start_date]
 
     if filter_name == "end_date":
         date_string = str(values)
         formatted_start_date = datetime.datetime.strptime(date_string, "%Y-%m-%d").strftime("%d/%m/%Y")
-        data = data[data['data-bio_data-date'] <= formatted_start_date]
+        data = data[data['Date'] <= formatted_start_date]
 
     return data
 

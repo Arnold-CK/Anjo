@@ -66,15 +66,13 @@ if authentication_status:
 
         with details:
 
-            st.spinner("Me")
-
             if expenses_df.empty:
                 st.info("No records match the filtration criteria")
                 st.stop()
 
             st.subheader("Costs by Categories")
 
-            df_cost_categories = expenses_df["data-bio_data-cost_category"].unique()
+            df_cost_categories = expenses_df["Cost Category"].unique()
             df_cost_categories.sort()
 
             for category in df_cost_categories:
@@ -84,21 +82,21 @@ if authentication_status:
         with dashboard:
 
             visuals_df = pd.DataFrame({
-                "Category": expenses_df["data-bio_data-cost_category"],
-                "Cost (ugx)": expenses_df["data-bio_data-total_cost"],
-                "Date": expenses_df["data-bio_data-date"]
+                "Category": expenses_df["Cost Category"],
+                "Cost (ugx)": expenses_df["Total Cost"],
+                "Date": expenses_df["Date"]
             })
 
             cost_metrics, pie_chart = st.columns([1, 2])
 
             with cost_metrics:
-                total_costs = expenses_df["data-bio_data-total_cost"].sum()
+                total_costs = expenses_df["Total Cost"].sum()
                 st.metric(
                     "Total Costs",
                     millify(total_costs, precision=2),
                 )
 
-                number_of_months = expenses_df['data-bio_data-date'].dt.month.nunique()
+                number_of_months = expenses_df['Date'].dt.month.nunique()
 
                 average_monthly_cost = total_costs / number_of_months if number_of_months > 0 else 0
 
