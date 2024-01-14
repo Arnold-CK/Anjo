@@ -40,7 +40,7 @@ def get_cost_categories():
     categories = [
         "Airtime & Data",
         "Construction",
-        "Delivery to Customer",
+        "Delivery To Customer",
         "Employee Benefits",
         "Fertilisers & Nutrients",
         "Maintenance & Repair",
@@ -48,7 +48,7 @@ def get_cost_categories():
         "Rent & Lease",
         "Seeds & Seedlings",
         "Tools & Equipment",
-        "Transport for Operations",
+        "Transport For Operations",
         "Wages & Salaries",
         "Yaka",
         "Supplies & Materials"
