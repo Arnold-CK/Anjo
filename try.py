@@ -1,18 +1,7 @@
-import json
-from datetime import datetime
-
 import gspread
 import streamlit as st
-import streamlit_authenticator as stauth
-import yaml
-from pytz import timezone
-from shillelagh.backends.apsw.db import connect
 from sqlalchemy import inspect
 from sqlalchemy.engine import create_engine
-from streamlit_option_menu import option_menu as option_menu
-from yaml.loader import SafeLoader
-
-import functions as fx
 
 sheet_credentials = st.secrets["sheet_credentials"]
 gc = gspread.service_account_from_dict(sheet_credentials)
