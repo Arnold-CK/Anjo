@@ -5,8 +5,7 @@ from typing import List
 import pandas as pd
 import streamlit as st
 from gspread_dataframe import get_as_dataframe
-
-import general_functions as gfx
+import gspread
 
 
 @st.cache_data
@@ -28,9 +27,7 @@ def format_date(input_date):
     return formatted_date
 
 
-def load_sales_data(sales_sheet):
-    sales_df = get_as_dataframe(sales_sheet, parse_dates=True)
-
+def clean_sales_df(sales_df):
     sales_df = sales_df.loc[:, ["data-bio_data-date", "data-bio_data-customer",
                                 "data-bio_data-size",
                                 "data-size_small-quantity_small",
@@ -91,7 +88,6 @@ def process_customer(sales_df, customer):
 
 
 def display_expander(customer, customer_df):
-
     total_qty = customer_df["Quantity"].sum()
     total_money = customer_df["Total Price"].sum()
     formatted_total_money = "{:,.0f}".format(total_money)
@@ -110,45 +106,20 @@ def filter_data(data: pd.DataFrame, filter_name: str, values: List[str]) -> pd.D
     if filter_name == "months":
         data = data[data['Date'].dt.month.isin(values)]
 
+    if filter_name == "customers":
+        data = data[data['Customer'].isin(values)]
+
+    if filter_name == "start_date":
+        date_string = str(values)
+        formatted_start_date = datetime.datetime.strptime(date_string, "%Y-%m-%d").strftime("%d/%m/%Y")
+        data = data[data['Date'] >= formatted_start_date]
+
+    if filter_name == "end_date":
+        date_string = str(values)
+        formatted_start_date = datetime.datetime.strptime(date_string, "%Y-%m-%d").strftime("%d/%m/%Y")
+        data = data[data['Date'] <= formatted_start_date]
+
     return data
-
-
-def show_filters():
-    years = st.multiselect("Select Years", gfx.get_years_since_2022(),
-                           placeholder="You can choose multiple options",
-                           default=datetime.datetime.now().year if st.session_state.date_range_toggle is False else None,
-                           disabled=st.session_state.date_range_toggle)
-
-    months = st.multiselect("Select Months", get_month_name_dict().values(),
-                            placeholder="You can choose multiple options",
-                            default=None,
-                            disabled=st.session_state.date_range_toggle)
-
-    def reset_years_and_months():
-        st.session_state.date_range_toggle = not st.session_state.date_range_toggle
-
-    filter_by_date_range = st.toggle("Filter by date range", value=st.session_state.date_range_toggle,
-                                     on_change=reset_years_and_months)
-
-    if filter_by_date_range:
-        def set_toggle_to_true():
-            st.session_state.date_range_toggle = True
-
-        start_date = st.date_input("Start Date (dd/mm/yyyy)", value=None, format="DD/MM/YYYY",
-                                   max_value=datetime.datetime.now(),
-                                   min_value=datetime.date(2022, 8, 1),
-                                   help="Start Date **MUST** be less than/equal to End Date",
-                                   on_change=set_toggle_to_true)
-
-        end_date = st.date_input("End Date (dd/mm/yyyy)", value=None, format="DD/MM/YYYY",
-                                 max_value=datetime.datetime.now(),
-                                 min_value=datetime.date(2022, 8, 1),
-                                 help="End Date **MUST** be greater than/equal to Start Date",
-                                 on_change=set_toggle_to_true)
-
-        return years, months, start_date, end_date
-
-    return years, months, None, None
 
 
 def convert_date_range(date_tuple):
@@ -158,3 +129,31 @@ def convert_date_range(date_tuple):
         converted_date = date_object.strftime('%d/%m/%y')
         converted_dates.append(converted_date)
     return converted_dates
+
+
+def get_sales_df():
+    sales_df = load_sales_df()
+    cleaned_sales_df = clean_sales_df(sales_df)
+
+    return cleaned_sales_df
+
+
+def load_sales_df():
+    sheet_credentials = st.secrets["sheet_credentials"]
+    gc = gspread.service_account_from_dict(sheet_credentials)
+
+    anjo_sales_workbook = gc.open_by_key(st.secrets["sales_sheet_key"])
+    sales_sheet = anjo_sales_workbook.worksheet("Sales")
+    sales_df = get_as_dataframe(sales_sheet, parse_dates=True)
+
+    return sales_df
+
+
+def get_customers():
+    sales_df = load_sales_df()
+
+    customers_df = sales_df.loc[:, ["data-bio_data-customer"]].dropna()
+    unique_customers = customers_df["data-bio_data-customer"].unique()
+    unique_customers.sort()
+
+    return unique_customers

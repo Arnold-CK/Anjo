@@ -18,11 +18,19 @@ if authentication_status:
     if 'date_range_toggle' not in st.session_state:
         st.session_state["date_range_toggle"] = False
 
+    if 'nav_bar_selection' not in st.session_state:
+        st.session_state["nav_bar_selection"] = "Costs"
+
     # st.write(st.session_state)
 
     sheet_credentials = st.secrets["sheet_credentials"]
     gc = gspread.service_account_from_dict(sheet_credentials)
     current_user = st.session_state["name"]
+
+
+    def change_nav_bar_state_selection(selected_option: str):
+        st.session_state.nav_bar = selected_option
+
 
     with st.sidebar:
         nav_bar = option_menu(
@@ -30,13 +38,18 @@ if authentication_status:
             ["Costs", "Sales"],
             icons=["bar-chart-line", "coin"],
             menu_icon="person-circle",
+            key="nav_bar_selection",
+            on_change=change_nav_bar_state_selection(st.session_state["nav_bar_selection"]),
+
         )
+
 
         # disable_status = st.toggle("Enable", value=True)
         # st.multiselect("Select", options=[i for i in range(10)], disabled=not disable_status)
 
         with st.expander("Filters", expanded=True):
-            years, months, cost_categories, start_date, end_date = cfx.show_filters()
+            years, months, cost_categories, customers, start_date, end_date = gfx.show_filters(
+                nav_bar_selection=st.session_state["nav_bar"])
 
             months = [k for k, v in gfx.get_month_name_dict().items() if v in months]
 
@@ -150,16 +163,16 @@ if authentication_status:
             st.altair_chart(stacked_chart, use_container_width=True)
 
     elif nav_bar == "Sales":
+
         sales_details, sales_dashboard = st.tabs(["📝 Details", "💰 Dashboard"])
 
-        anjo_sales_workbook = gc.open_by_key(st.secrets["sales_sheet_key"])
-
-        sales_sheet = anjo_sales_workbook.worksheet("Sales")
-
-        final_sales_df = sfx.load_sales_data(sales_sheet)
+        final_sales_df = sfx.get_sales_df()
 
         final_sales_df = sfx.filter_data(final_sales_df, 'years', years)
         final_sales_df = sfx.filter_data(final_sales_df, 'months', months)
+        final_sales_df = sfx.filter_data(final_sales_df, 'customers', customers)
+        final_sales_df = cfx.filter_data(final_sales_df, 'start_date', start_date)
+        final_sales_df = cfx.filter_data(final_sales_df, 'end_date', end_date)
 
         with sales_details:
             if final_sales_df.empty:
@@ -192,7 +205,6 @@ if authentication_status:
                     "Total Quantity Sold (kgs)",
                     millify(total_quantity, precision=2),
                 )
-
 
             visuals_df = pd.DataFrame({
                 "Quantity Sold (kgs)": final_sales_df["Quantity"],
