@@ -5,11 +5,13 @@ import streamlit as st
 from millify import millify
 from streamlit_option_menu import option_menu as option_menu
 
-import functions as fx
+import cost_functions as cfx
+import general_functions as gfx
+import sales_functions as sfx
 
-fx.set_page_config()
+gfx.set_page_config()
 
-name, authentication_status, username, authenticator = fx.auth()
+name, authentication_status, username, authenticator = gfx.auth()
 
 if authentication_status:
 
@@ -25,8 +27,8 @@ if authentication_status:
     with st.sidebar:
         nav_bar = option_menu(
             current_user,
-            ["Costs"],
-            icons=["bar-chart-line"],
+            ["Costs", "Sales"],
+            icons=["bar-chart-line", "coin"],
             menu_icon="person-circle",
         )
 
@@ -34,9 +36,9 @@ if authentication_status:
         # st.multiselect("Select", options=[i for i in range(10)], disabled=not disable_status)
 
         with st.expander("Filters", expanded=True):
-            years, months, cost_categories, start_date, end_date = fx.show_filters()
+            years, months, cost_categories, start_date, end_date = cfx.show_filters()
 
-            months = [k for k, v in fx.get_month_name_dict().items() if v in months]
+            months = [k for k, v in gfx.get_month_name_dict().items() if v in months]
 
             if end_date and not start_date:
                 st.error("Cannot have an end date without a start date")
@@ -56,13 +58,13 @@ if authentication_status:
 
         expenses_sheet = anjo_workbook.worksheet("Expenses")
 
-        expenses_df = fx.load_expense_data(expenses_sheet)
+        expenses_df = cfx.load_expense_data(expenses_sheet)
 
-        expenses_df = fx.filter_data(expenses_df, 'years', years)
-        expenses_df = fx.filter_data(expenses_df, 'months', months)
-        expenses_df = fx.filter_data(expenses_df, "cost_categories", cost_categories)
-        expenses_df = fx.filter_data(expenses_df, 'start_date', start_date)
-        expenses_df = fx.filter_data(expenses_df, 'end_date', end_date)
+        expenses_df = cfx.filter_data(expenses_df, 'years', years)
+        expenses_df = cfx.filter_data(expenses_df, 'months', months)
+        expenses_df = cfx.filter_data(expenses_df, "cost_categories", cost_categories)
+        expenses_df = cfx.filter_data(expenses_df, 'start_date', start_date)
+        expenses_df = cfx.filter_data(expenses_df, 'end_date', end_date)
 
         with details:
 
@@ -76,8 +78,8 @@ if authentication_status:
             df_cost_categories.sort()
 
             for category in df_cost_categories:
-                category_df = fx.process_category(expenses_df, category)
-                fx.display_expander(category, category_df)
+                category_df = cfx.process_category(expenses_df, category)
+                cfx.display_expander(category, category_df)
 
         with dashboard:
 
@@ -146,6 +148,91 @@ if authentication_status:
             )
 
             st.altair_chart(stacked_chart, use_container_width=True)
+
+    elif nav_bar == "Sales":
+        sales_details, sales_dashboard = st.tabs(["📝 Details", "💰 Dashboard"])
+
+        anjo_sales_workbook = gc.open_by_key(st.secrets["sales_sheet_key"])
+
+        sales_sheet = anjo_sales_workbook.worksheet("Sales")
+
+        final_sales_df = sfx.load_sales_data(sales_sheet)
+
+        final_sales_df = sfx.filter_data(final_sales_df, 'years', years)
+        final_sales_df = sfx.filter_data(final_sales_df, 'months', months)
+
+        with sales_details:
+            if final_sales_df.empty:
+                st.info("No records match the filtration criteria")
+                st.stop()
+
+            st.subheader("Sales by Customers")
+
+            df_customers = final_sales_df["Customer"].unique()
+            df_customers.sort()
+
+            for customer in df_customers:
+                customer_df = sfx.process_customer(final_sales_df, customer)
+                sfx.display_expander(customer, customer_df)
+
+        with sales_dashboard:
+
+            ttl_revenue, ttl_quantity = st.columns(2)
+
+            with ttl_revenue:
+                total_revenue = final_sales_df["Total Price"].sum()
+                st.metric(
+                    "Total Revenue (ugx)",
+                    millify(total_revenue, precision=2),
+                )
+
+            with ttl_quantity:
+                total_quantity = final_sales_df["Quantity"].sum()
+                st.metric(
+                    "Total Quantity Sold (kgs)",
+                    millify(total_quantity, precision=2),
+                )
+
+
+            visuals_df = pd.DataFrame({
+                "Quantity Sold (kgs)": final_sales_df["Quantity"],
+                "Revenue (ugx)": final_sales_df["Total Price"],
+                "Date": final_sales_df["Date"]
+            })
+
+            st.write("---")
+
+            line = (
+                alt.Chart(visuals_df)
+                .mark_line()
+                .encode(
+                    x=alt.X("month(Date):O", title="Month"),
+                    y=alt.Y("sum(Revenue (ugx)):Q", title="Total Revenue (UGX)"),
+                    tooltip=[alt.Tooltip("month(Date):O", title="Month"),
+                             alt.Tooltip("sum(Revenue (ugx)):Q", title="Total Revenue (UGX)", format=','),
+                             ]
+                )
+            )
+
+            points = line.mark_point()
+
+            st.altair_chart(line + points, use_container_width=True)
+
+            st.write("---")
+
+            bar = (
+                alt.Chart(visuals_df)
+                .mark_bar()
+                .encode(
+                    x=alt.X("month(Date):O", title="Month"),
+                    y=alt.Y("sum(Quantity Sold (kgs)):Q", title="Total Quantity Sold (kgs)"),
+                    tooltip=[alt.Tooltip("month(Date):O", title="Month"),
+                             alt.Tooltip("sum(Quantity Sold (kgs)):Q", title="Total Quantity Sold (kgs)", format=','),
+                             ]
+                )
+            )
+
+            st.altair_chart(bar, use_container_width=True)
 
     # --- DATA ENTRY FORMS ---
 
