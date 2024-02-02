@@ -115,9 +115,6 @@ def filter_data(data: pd.DataFrame, filter_name: str, values: List[str]) -> pd.D
     return data
 
 
-
-
-
 def convert_date_range(date_tuple):
     converted_dates = []
     for date_str in date_tuple:

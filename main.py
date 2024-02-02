@@ -168,6 +168,14 @@ if authentication_status:
 
         final_sales_df = sfx.get_sales_df()
 
+        #TODO:
+        #Turn this into a function that takes in the df, and a dictionary of column names and values
+        #Annotate all functions to clearly show the data types of the attributes plus what they return
+        #Create functions to handle the costs
+        #Put files in folders where need be
+        #Transfer data from old sheets
+        #Put all data being read by the app in one sheet
+
         final_sales_df = sfx.filter_data(final_sales_df, 'years', years)
         final_sales_df = sfx.filter_data(final_sales_df, 'months', months)
         final_sales_df = sfx.filter_data(final_sales_df, 'customers', customers)
