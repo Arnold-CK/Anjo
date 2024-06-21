@@ -89,7 +89,6 @@ def show_filters(nav_bar_selection: str):
                                          placeholder="You can choose multiple options")
 
     if nav_bar_selection == "Sales":
-
         unique_customers = sfx.get_customers()
         customers = st.multiselect("Select Customers", unique_customers,
                                    placeholder="You can choose multiple options")
@@ -119,3 +118,12 @@ def show_filters(nav_bar_selection: str):
         return years, months, cost_categories, customers, start_date, end_date
 
     return years, months, cost_categories, customers, None, None
+
+
+def tryv(me:str):
+    p = [].append(me)
+    hashed_passwords = stauth.Hasher(p).generate()
+    return hashed_passwords
+
+# x = tryv("vicky123")
+# print(x)

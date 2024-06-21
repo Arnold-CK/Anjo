@@ -48,6 +48,9 @@ def format_date(input_date):
 def load_expense_data(expenses_sheet):
     expenses_df = get_as_dataframe(expenses_sheet, parse_dates=True)
 
+    #TODO: Investigate if there is data loss with the dropNa
+
+
     expenses_df = expenses_df.loc[:, ["data-bio_data-date", "data-bio_data-item",
                                       "data-bio_data-cost_category",
                                       "data-bio_data-total_cost", ]].dropna()

@@ -28,13 +28,16 @@ def format_date(input_date):
 
 
 def clean_sales_df(sales_df):
+
+    #ToDo: Investigate why there is data loss when dropNa is used
+
     sales_df = sales_df.loc[:, ["data-bio_data-date", "data-bio_data-customer",
                                 "data-bio_data-size",
                                 "data-size_small-quantity_small",
                                 "data-size_small-unit_price_small",
                                 "data-size_small-total_price_small",
                                 "data-size_big-quantity_big", "data-size_big-unit_price_big",
-                                "data-size_big-total_price_big"]].dropna()
+                                "data-size_big-total_price_big"]]
 
     big_sales_df = sales_df[sales_df["data-bio_data-size"] == "big"]
 
@@ -157,3 +160,22 @@ def get_customers():
     unique_customers.sort()
 
     return unique_customers
+
+def get_units():
+    units = [
+        "kg"
+    ]
+
+    units.sort()
+
+    return units
+
+def get_sizes():
+    sizes = [
+        "big",
+        "small"
+    ]
+
+    sizes.sort()
+
+    return sizes

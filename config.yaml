@@ -12,9 +12,9 @@ credentials:
       email: arnoldcyprian@gmail.com
       name: Arnold Kigonya
       password: $2b$12$NV95MRxhNUFD2MiAyHP/HeFwwdM94q3XBymov1EPcf/ClOUesbsOu
-    gift:
-      email: giftkeeta@gmail.com
-      name: Gift Zulfa
+    victor:
+      email: tindimwebwavictor24@gmail.com
+      name: Victor Tindimwebwa
       password: $2b$12$iC8u4xl5NAvDbB.YCv8ZceD9hXRkRsInr6H5lbeCnusc0mu25SGKy
 
 cookie:
