@@ -15,7 +15,7 @@ credentials:
     victor:
       email: tindimwebwavictor24@gmail.com
       name: Victor Tindimwebwa
-      password: $2b$12$iC8u4xl5NAvDbB.YCv8ZceD9hXRkRsInr6H5lbeCnusc0mu25SGKy
+      password: vicky123
 
 cookie:
   expiry_days: 100

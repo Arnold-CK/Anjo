@@ -119,11 +119,3 @@ def show_filters(nav_bar_selection: str):
 
     return years, months, cost_categories, customers, None, None
 
-
-def tryv(me:str):
-    p = [].append(me)
-    hashed_passwords = stauth.Hasher(p).generate()
-    return hashed_passwords
-
-# x = tryv("vicky123")
-# print(x)

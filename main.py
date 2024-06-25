@@ -10,6 +10,7 @@ from streamlit_option_menu import option_menu as option_menu
 
 import cost_functions as cfx
 import deposit_functions as dfx
+from io import StringIO
 import general_functions as gfx
 import sales_functions as sfx
 import withdraw_functions as wfx
@@ -55,7 +56,6 @@ if authentication_status:
 
     def change_nav_bar_state_selection(selected_option: str):
         st.session_state.nav_bar = selected_option
-
 
     with st.sidebar:
         nav_bar = option_menu(
@@ -187,95 +187,114 @@ if authentication_status:
             st.altair_chart(stacked_chart, use_container_width=True)
 
         with costs_form:
-            item_key = "txtCostItem"
-            category_key = "slctCostCategory"
-            amount_key = "txtCostAmount"
+            st.title(":red[Costs]")
 
-            with st.form(key="anjo_costs", clear_on_submit=True):
-                cost_date = st.date_input("Date (dd/mm/yyyy)", value=None, format="DD/MM/YYYY",
-                                          max_value=datetime.datetime.now(),
-                                          min_value=datetime.date(2022, 8, 1),
-                                          help="Date **MUST** be before or equal to today")
+            with st.form(key="costs"):
+                c1, c2 = st.columns(2, vertical_alignment="bottom")
+                c3, c4 = st.columns(2, vertical_alignment="bottom")
+                c5, c6 = st.columns(2, vertical_alignment="bottom")
+                c7, c8 = st.columns(2, vertical_alignment="bottom")
 
-                st.write("---")
+                with c1:
+                    date = st.date_input("Date (dd/mm/yyyy)", value=datetime.datetime.now(), format="DD/MM/YYYY",
+                                         max_value=datetime.datetime.now(),
+                                         min_value=datetime.date(2022, 8, 1),
+                                         )
 
-                st.text_input(label="Item", disabled=False, key=item_key)
+                with c2:
+                    category = st.selectbox(label="Category", options=cfx.get_cost_categories())
 
-                st.selectbox(
-                    label="Category", options=cost_categories, key=category_key
-                )
+                with c3:
+                    item = st.text_input(
+                        placeholder="airtime",
+                        label="Item",
+                        disabled=False
+                    )
 
-                st.text_input(
-                    label="Amount",
-                    disabled=False,
-                    key=amount_key,
-                    placeholder="ugx",
-                )
+                with c4:
+                    cost_quantity = st.text_input(
+                        label="Quantity",
+                        disabled=False
+                    )
 
-                submitted = st.form_submit_button("Save")
+                with c5:
+                    unit_cost = st.text_input(
+                        key="unit-cost",
+                        placeholder="ugx",
+                        label="Unit Cost",
+                        disabled=False
+                    )
 
-                if submitted:
-                    is_valid = True
-                    cost_date = cost_date.strftime("%d-%b-%Y")
+                with c6:
+                    total_cost = st.text_input(
+                        placeholder="ugx",
+                        label="Total Cost",
+                        disabled=False
+                    )
 
-                    with st.spinner("🔍 Validating form..."):
-                        item = st.session_state.get(item_key, "")
-                        category = st.session_state.get(category_key, "")
-                        amount = st.session_state.get(amount_key, "")
+                with c7:
+                    transport_cost = st.text_input(
+                        placeholder="ugx",
+                        label="Transport Cost (if any)",
+                        disabled=False
+                    )
 
-                        if not item.strip():
-                            is_valid = False
-                            st.warning("⚠️ Item cannot be left blank")
+                with c8:
+                    transport_details = st.text_input(
+                        placeholder="from seeta to farm",
+                        label="Transport Details (if any)",
+                        disabled=False
+                    )
 
-                        if not category.strip():
-                            is_valid = False
-                            st.warning("⚠️ Category cannot be left blank")
+                source_of_funds = st.selectbox("Source of Money", ["Bank", "Personal", "Sales"]
+                if current_user == "Andrew" or current_user == "Tony" else ["Bank", "Sales"])
 
-                        if amount.strip():
-                            amount = float(amount.strip())
-                            if amount <= 0.0:
-                                is_valid = False
-                                st.warning("🚨 Please enter an Amount greater than zero")
-                        else:
-                            is_valid = False
-                            st.warning("⚠️ Amount cannot be left blank")
+                cost_submitted = st.form_submit_button("Save")
 
-                    if is_valid:
-                        st.info("👍 Form is Valid")
+                if cost_submitted:
+                    timezone = timezone("Africa/Nairobi")
 
-                        with st.spinner("Saving Cost Data..."):
-                            timezone = timezone("Africa/Nairobi")
+                    # amount_deposited = int(amount.strip())
 
-                            timestamp = datetime.datetime.now(timezone).strftime(
-                                "%d-%b-%Y %H:%M:%S" + " EAT"
-                            )
+                    timestamp = datetime.datetime.now(timezone).strftime(
+                        "%d-%b-%Y %H:%M:%S" + " EAT"
+                    )
 
-                            data = [
-                                cost_date,
-                                item,
-                                category,
-                                amount,
-                                current_user,
-                                timestamp,
-                            ]
+                    data = [
+                        timestamp,
+                        date.strftime('%d/%m/%y'),
+                        item,
+                        category,
+                        cost_quantity,
+                        unit_cost,
+                        total_cost,
+                        transport_cost,
+                        transport_details,
+                        source_of_funds,
+                        current_user
+                    ]
 
-                            anjo_sheet = gc.open_by_key(st.secrets["cost_sheet_key"])
-                            worksheet = anjo_sheet.worksheet("Costs")
+                    with st.spinner("Saving cost data..."):
+                        sheet_credentials = st.secrets["sheet_credentials"]
+                        gc = gspread.service_account_from_dict(sheet_credentials)
 
-                            all_values = worksheet.get_all_values()
+                        pepper_workbook = gc.open_by_key(st.secrets["cost_sheet_key"])
+                        deposits_sheet = pepper_workbook.worksheet("Costs")
 
-                            next_row_index = len(all_values) + 1
+                        all_values = deposits_sheet.get_all_values()
 
-                            worksheet.append_row(
-                                data,
-                                value_input_option="user_entered",
-                                insert_data_option="insert_rows",
-                                table_range=f"a{next_row_index}",
-                            )
+                        next_row_index = len(all_values) + 1
 
-                            st.success("✅ Cost data Saved Successfully!")
+                        deposits_sheet.append_rows(
+                            [data],
+                            value_input_option="user_entered",
+                            insert_data_option="insert_rows",
+                            table_range=f"a{next_row_index}",
+                        )
 
-                            # REDIRECT TO THE COSTS DASHBOARD
+                        st.success(
+                            "✅ Cost saved Successfully"
+                        )
 
     elif nav_bar == "Sales":
 
@@ -536,6 +555,11 @@ if authentication_status:
                     help="Please enter a value greater than zero"
                 )
 
+                # uploaded_image = st.file_uploader("Upload deposit slip", ['png', 'jpg', 'jpeg'])
+                # imageio = StringIO(uploaded_image.getvalue())
+                # interim = imageio.decode("utf-8")
+                # image = imageio.read()
+
                 submitted = st.form_submit_button("Save")
 
                 if submitted:
@@ -550,7 +574,8 @@ if authentication_status:
                     data = [
                         timestamp,
                         date.strftime('%d/%m/%y'),
-                        int(amount)
+                        int(amount),
+                        current_user
                     ]
 
                     with st.spinner("Saving deposit data..."):
@@ -618,6 +643,12 @@ if authentication_status:
                     help="Please enter a value greater than zero"
                 )
 
+                reason_for_withdraw = st.text_input(
+                    placeholder="reason for withdraw",
+                    label="Reason for Withdraw",
+                    disabled=False
+                )
+
                 submitted = st.form_submit_button("Save")
 
                 if submitted:
@@ -630,7 +661,9 @@ if authentication_status:
                     data = [
                         timestamp,
                         date.strftime('%d/%b/%Y'),
-                        int(amount)
+                        int(amount),
+                        reason_for_withdraw,
+                        current_user
                     ]
 
                     with st.spinner("Saving withdraw data..."):
