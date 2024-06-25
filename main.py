@@ -1,20 +1,18 @@
+import datetime
+
 import altair as alt
 import gspread
 import pandas as pd
 import streamlit as st
 from millify import millify
+from pytz import timezone
 from streamlit_option_menu import option_menu as option_menu
 
 import cost_functions as cfx
+import deposit_functions as dfx
 import general_functions as gfx
 import sales_functions as sfx
-import deposit_functions as dfx
 import withdraw_functions as wfx
-from pytz import timezone
-
-import calendar
-import datetime
-from datetime import date
 
 gfx.set_page_config()
 
@@ -33,6 +31,20 @@ if authentication_status:
 
     if 'unit-price' not in st.session_state:
         st.session_state["unit-price"] = 0
+
+    if 'total-price' not in st.session_state:
+        st.session_state["total-price"] = 0
+
+
+    def calculate_total_price():
+        try:
+            sale_quantity = int(st.session_state['quantity'])
+            sale_unit_price = int(st.session_state['unit-price'])
+            st.session_state["total-price"] = (sale_quantity * sale_unit_price)
+            return sale_quantity * sale_unit_price
+        except ValueError:
+            return 0
+
 
     # st.write(st.session_state)
 
@@ -360,48 +372,81 @@ if authentication_status:
         with sales_form:
             st.title(":green[Sales]")
 
-            with st.form(key="sales", clear_on_submit=True):
-                date = st.date_input("Date (dd/mm/yyyy)", value=None, format="DD/MM/YYYY",
-                                     max_value=datetime.datetime.now(),
-                                     min_value=datetime.date(2022, 8, 1),
-                                     help="Date **MUST** be before or equal to today")
+            with st.form(key="sales"):
+                x1, x2 = st.columns(2, vertical_alignment="bottom")
+                x3, x4 = st.columns(2, vertical_alignment="bottom")
+                x5, x6 = st.columns(2, vertical_alignment="bottom")
+                x7, x8 = st.columns(2, vertical_alignment="bottom")
 
-                customer = st.text_input(
-                    placeholder="john doe",
-                    label="Customer",
-                    disabled=False
-                )
+                with x1:
+                    date = st.date_input("Date (dd/mm/yyyy)", value=datetime.datetime.now(), format="DD/MM/YYYY",
+                                         max_value=datetime.datetime.now(),
+                                         min_value=datetime.date(2022, 8, 1),
+                                         )
 
-                size = st.selectbox(label="Size", options=sfx.get_sizes())
+                with x2:
+                    customer = st.text_input(
+                        placeholder="vicky tindi",
+                        label="Customer",
+                        disabled=False
+                    )
 
-                unit = st.selectbox(label="Unit", options=sfx.get_units())
+                with x3:
+                    size = st.selectbox(label="Size", options=sfx.get_sizes())
 
-                unit_price = st.text_input(
-                    key="unit-price",
-                    placeholder="ugx",
-                    label="Unit Price",
-                    disabled=False,
-                    help="Please enter a value greater than zero"
-                )
+                with x4:
+                    unit = st.selectbox(label="Unit", options=sfx.get_units())
 
-                quantity = st.text_input(
-                    key="quantity",
+                with x5:
+                    quantity = st.text_input(
+                        value=1,
+                        key="quantity",
+                        placeholder="0",
+                        label="Quantity",
+                        disabled=False,
+                        # help="Please enter a value greater than zero"
+                    )
+
+                with x6:
+                    unit_price = st.text_input(
+                        value=1,
+                        key="unit-price",
+                        placeholder="ugx",
+                        label="Unit Price",
+                        disabled=False,
+                        # help="Please enter a value greater than zero"
+                    )
+
+
+                with x7:
+                    total_price = st.number_input(
+                        placeholder="ugx",
+                        label="Total Price",
+                        disabled=True,
+                        value=calculate_total_price()
+
+                    )
+
+                with x8:
+                    amount_paid = st.text_input(
+                        key="amount_paid",
+                        placeholder="0",
+                        label="Amount Paid",
+                        disabled=False,
+                        # help="Please enter a value greater than zero"
+                    )
+
+                delivery_fee = st.text_input(
+                    key="delivery",
                     placeholder="0",
-                    label="Quantity",
+                    label="Delivery Fee",
                     disabled=False,
-                    help="Please enter a value greater than zero"
+                    # help="Please enter a value greater than zero"
                 )
 
-                total_price = st.text_input(
-                    placeholder="ugx",
-                    label="Total Price",
-                    disabled=True,
-                    value=int(st.session_state["quantity"]) * int(st.session_state["unit-price"])
-                    if int(st.session_state["quantity"]) > 0 and
-                       int(st.session_state["unit-price"]) > 0 else 0
-                )
+                sale_submitted = st.form_submit_button("Save", on_click=calculate_total_price)
 
-                sale_submitted = st.form_submit_button("Save")
+                # payment_status = st.selectbox(label="Payment Status")
 
                 if sale_submitted:
                     timezone = timezone("Africa/Nairobi")
@@ -415,15 +460,23 @@ if authentication_status:
                     data = [
                         timestamp,
                         date.strftime('%d/%m/%y'),
-                        int(amount)
+                        customer,
+                        size,
+                        unit,
+                        unit_price,
+                        quantity,
+                        st.session_state["total-price"],
+                        # payment_status,
+                        amount_paid,
+                        current_user
                     ]
 
-                    with st.spinner("Saving deposit data..."):
+                    with st.spinner("Saving sale data..."):
                         sheet_credentials = st.secrets["sheet_credentials"]
                         gc = gspread.service_account_from_dict(sheet_credentials)
 
-                        pepper_workbook = gc.open_by_key(st.secrets["sheet_key"])
-                        deposits_sheet = pepper_workbook.worksheet("Deposits")
+                        pepper_workbook = gc.open_by_key(st.secrets["sales_sheet_key"])
+                        deposits_sheet = pepper_workbook.worksheet("Final Sales")
 
                         all_values = deposits_sheet.get_all_values()
 
@@ -437,7 +490,7 @@ if authentication_status:
                         )
 
                         st.success(
-                            "✅ Deposit Saved Successfully. Feel free to close the application"
+                            "✅ Sale saved Successfully"
                         )
 
     elif nav_bar == "Deposits":
