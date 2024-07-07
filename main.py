@@ -19,8 +19,7 @@ import withdraw_functions as wfx
 
 gfx.set_page_config()
 
-# name, authentication_status, username, authenticator = gfx.auth()
-authentication_status = True
+name, authentication_status, username, authenticator = gfx.auth()
 if authentication_status:
 
     # # Define the scope
@@ -749,7 +748,7 @@ if authentication_status:
     elif nav_bar == "Harvests":
         st.subheader("Coming in the next release")
 
-    # authenticator.logout("Logout", "sidebar", key="unique_key")
+    authenticator.logout("Logout", "sidebar", key="unique_key")
 
 elif authentication_status is False:
     st.error("Username/password is incorrect")
