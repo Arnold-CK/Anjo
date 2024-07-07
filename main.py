@@ -23,24 +23,24 @@ name, authentication_status, username, authenticator = gfx.auth()
 
 if authentication_status:
 
-    # Define the scope
-    scope = ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/spreadsheets"]
-
-    # Load the credentials
-    creds = Credentials.from_service_account_file("jsonkeys.json", scopes=scope)
-
-    # Connect to Google Sheets
-    client = gspread.authorize(creds)
-    # sheet = client.open("your_google_sheet_name").sheet1
-
-    drive_service = build('drive', 'v3', credentials=creds)
-
-    def upload_to_drive(file, file_name):
-        file_metadata = {'name': file_name}
-        media = MediaFileUpload(file_name, resumable=True, mimetype="image/png")
-        file = drive_service.files().create(body=file,media_body=media, fields='id').execute()
-        file_id = file.get('id')
-        return f"https://drive.google.com/uc?id={file_id}"
+    # # Define the scope
+    # scope = ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/spreadsheets"]
+    #
+    # # Load the credentials
+    # creds = Credentials.from_service_account_file("jsonkeys.json", scopes=scope)
+    #
+    # # Connect to Google Sheets
+    # client = gspread.authorize(creds)
+    # # sheet = client.open("your_google_sheet_name").sheet1
+    #
+    # drive_service = build('drive', 'v3', credentials=creds)
+    #
+    # def upload_to_drive(file, file_name):
+    #     file_metadata = {'name': file_name}
+    #     media = MediaFileUpload(file_name, resumable=True, mimetype="image/png")
+    #     file = drive_service.files().create(body=file,media_body=media, fields='id').execute()
+    #     file_id = file.get('id')
+    #     return f"https://drive.google.com/uc?id={file_id}"
 
 
     @st.experimental_dialog("Are you sure?")
