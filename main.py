@@ -27,7 +27,7 @@ if authentication_status:
     # scope = ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/spreadsheets"]
     #
     # # Load the credentials
-    # creds = Credentials.from_service_account_file("jsonkeys.json", scopes=scope)
+    # creds = Credentials.from_service_account_file("", scopes=scope)
     #
     # # Connect to Google Sheets
     # client = gspread.authorize(creds)
