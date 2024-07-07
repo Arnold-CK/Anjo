@@ -28,52 +28,54 @@ def format_date(input_date):
 
 
 def clean_sales_df(sales_df):
-    sales_df = sales_df.loc[:, ["data-bio_data-date", "data-bio_data-customer",
-                                "data-bio_data-size",
-                                "data-size_small-quantity_small",
-                                "data-size_small-unit_price_small",
-                                "data-size_small-total_price_small",
-                                "data-size_big-quantity_big", "data-size_big-unit_price_big",
-                                "data-size_big-total_price_big"]].dropna()
+    # ToDo: Investigate why there is data loss when dropNa is used
 
-    big_sales_df = sales_df[sales_df["data-bio_data-size"] == "big"]
+    sales_df = sales_df.loc[:, ["date", "customer",
+                                "size",
+                                "quantity",
+                                "unit",
+                                "unit price",
+                                "total price"]].dropna()
 
-    big_sales_df = big_sales_df.loc[:, ["data-bio_data-date", "data-bio_data-customer",
-                                        "data-bio_data-size",
-                                        "data-size_big-quantity_big", "data-size_big-unit_price_big",
-                                        "data-size_big-total_price_big"]]
+    # big_sales_df = sales_df[sales_df["data-bio_data-size"] == "big"]
+    #
+    # big_sales_df = big_sales_df.loc[:, ["data-bio_data-date", "data-bio_data-customer",
+    #                                     "data-bio_data-size",
+    #                                     "data-size_big-quantity_big", "data-size_big-unit_price_big",
+    #                                     "data-size_big-total_price_big"]]
+    #
+    # small_sales_df = sales_df[sales_df["data-bio_data-size"] == "small"]
+    #
+    # small_sales_df = small_sales_df.loc[:, ["data-bio_data-date", "data-bio_data-customer",
+    #                                         "data-bio_data-size",
+    #                                         "data-size_small-quantity_small",
+    #                                         "data-size_small-unit_price_small",
+    #                                         "data-size_small-total_price_small"]]
 
-    small_sales_df = sales_df[sales_df["data-bio_data-size"] == "small"]
-
-    small_sales_df = small_sales_df.loc[:, ["data-bio_data-date", "data-bio_data-customer",
-                                            "data-bio_data-size",
-                                            "data-size_small-quantity_small",
-                                            "data-size_small-unit_price_small",
-                                            "data-size_small-total_price_small"]]
-
-    small_sales_df.rename(columns={
-        "data-bio_data-date": "Date",
-        "data-bio_data-customer": "Customer",
-        "data-bio_data-size": "Size",
-        "data-size_small-quantity_small": "Quantity",
-        "data-size_small-unit_price_small": "Unit Price",
-        "data-size_small-total_price_small": "Total Price",
+    sales_df.rename(columns={
+        "date": "Date",
+        "customer": "Customer",
+        "size": "Size",
+        "unit": "Unit",
+        "unit price": "Unit Price",
+        "quantity": "Quantity",
+        "total price": "Total Price",
     }, inplace=True)
 
-    big_sales_df.rename(columns={
-        "data-bio_data-date": "Date",
-        "data-bio_data-customer": "Customer",
-        "data-bio_data-size": "Size",
-        "data-size_big-quantity_big": "Quantity",
-        "data-size_big-unit_price_big": "Unit Price",
-        "data-size_big-total_price_big": "Total Price",
-    }, inplace=True)
+    # big_sales_df.rename(columns={
+    #     "data-bio_data-date": "Date",
+    #     "data-bio_data-customer": "Customer",
+    #     "data-bio_data-size": "Size",
+    #     "data-size_big-quantity_big": "Quantity",
+    #     "data-size_big-unit_price_big": "Unit Price",
+    #     "data-size_big-total_price_big": "Total Price",
+    # }, inplace=True)
 
-    final_sales_df = pd.concat([big_sales_df, small_sales_df], ignore_index=True)
+    # final_sales_df = pd.concat([big_sales_df, small_sales_df], ignore_index=True)
 
-    final_sales_df['Date'] = pd.to_datetime(final_sales_df['Date'], format='%d/%m/%y')
+    sales_df['Date'] = pd.to_datetime(sales_df['Date'], format='%d/%m/%y')
 
-    return final_sales_df
+    return sales_df
 
 
 def process_customer(sales_df, customer):
@@ -142,8 +144,9 @@ def load_sales_df():
     sheet_credentials = st.secrets["sheet_credentials"]
     gc = gspread.service_account_from_dict(sheet_credentials)
 
-    anjo_sales_workbook = gc.open_by_key(st.secrets["sales_sheet_key"])
-    sales_sheet = anjo_sales_workbook.worksheet("Sales")
+    # anjo_sales_workbook = gc.open_by_key(st.secrets["sales_sheet_key"])
+    anjo_sales_workbook = gc.open_by_url(st.secrets["sales_sheet_key"])
+    sales_sheet = anjo_sales_workbook.worksheet("Final Sales")
     sales_df = get_as_dataframe(sales_sheet, parse_dates=True)
 
     return sales_df
@@ -152,8 +155,29 @@ def load_sales_df():
 def get_customers():
     sales_df = load_sales_df()
 
-    customers_df = sales_df.loc[:, ["data-bio_data-customer"]].dropna()
-    unique_customers = customers_df["data-bio_data-customer"].unique()
+    customers_df = sales_df.loc[:, ["customer"]].dropna()
+    unique_customers = customers_df["customer"].unique()
     unique_customers.sort()
 
     return unique_customers
+
+
+def get_units():
+    units = [
+        "kg"
+    ]
+
+    units.sort()
+
+    return units
+
+
+def get_sizes():
+    sizes = [
+        "big",
+        "small"
+    ]
+
+    sizes.sort()
+
+    return sizes
