@@ -2,6 +2,7 @@
 secrets.toml
 anjo
 Logs
+.idea
 
 
 # Byte-compiled / optimized / DLL files
