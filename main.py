@@ -1,4 +1,8 @@
 import datetime
+import os
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver import webkitgtk as wkit
+
 
 import altair as alt
 import gspread
@@ -41,6 +45,10 @@ if authentication_status:
     #     file_id = file.get('id')
     #     return f"https://drive.google.com/uc?id={file_id}"
 
+    chrome_options = Options()
+    # incognito window
+    chrome_options.add_argument("--incognito")
+
 
     @st.experimental_dialog("Are you sure?")
     def user_surety():
@@ -56,6 +64,7 @@ if authentication_status:
             return "yes"
         elif no_clicked:
             return "no"
+
 
     if 'date_range_toggle' not in st.session_state:
         st.session_state["date_range_toggle"] = False
@@ -92,6 +101,7 @@ if authentication_status:
 
     def change_nav_bar_state_selection(selected_option: str):
         st.session_state.nav_bar = selected_option
+
 
     with st.sidebar:
 
@@ -424,7 +434,8 @@ if authentication_status:
                         x=alt.X("month(Date):O", title="Month"),
                         y=alt.Y("sum(Quantity Sold (kgs)):Q", title="Total Quantity Sold (kgs)"),
                         tooltip=[alt.Tooltip("month(Date):O", title="Month"),
-                                 alt.Tooltip("sum(Quantity Sold (kgs)):Q", title="Total Quantity Sold (kgs)", format=','),
+                                 alt.Tooltip("sum(Quantity Sold (kgs)):Q", title="Total Quantity Sold (kgs)",
+                                             format=','),
                                  ]
                     )
                 )
@@ -478,7 +489,6 @@ if authentication_status:
                         disabled=False,
                         # help="Please enter a value greater than zero"
                     )
-
 
                 with x7:
                     total_price = st.number_input(

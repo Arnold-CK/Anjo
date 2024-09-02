@@ -11,6 +11,7 @@ import cost_functions as cfx
 import sales_functions as sfx
 
 
+
 def switch_page(page_name: str):
     from streamlit.runtime.scriptrunner import RerunData, RerunException
     from streamlit.source_util import get_pages
