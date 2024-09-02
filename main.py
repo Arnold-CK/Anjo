@@ -305,7 +305,9 @@ if authentication_status:
                         date.strftime('%d/%m/%y'),
                         item,
                         category,
+                        "",
                         cost_quantity,
+                        "",
                         unit_cost,
                         total_cost,
                         transport_cost,
@@ -538,7 +540,7 @@ if authentication_status:
                         sheet_credentials = st.secrets["sheet_credentials"]
                         gc = gspread.service_account_from_dict(sheet_credentials)
 
-                        pepper_workbook = gc.open_by_key(st.secrets["sales_sheet_key"])
+                        pepper_workbook = gc.open_by_url(st.secrets["sales_sheet_key"])
                         deposits_sheet = pepper_workbook.worksheet("Final Sales")
 
                         all_values = deposits_sheet.get_all_values()
