@@ -6,7 +6,6 @@ import pandas as pd
 import streamlit as st
 from millify import millify
 from pytz import timezone
-from selenium.webdriver.chrome.options import Options
 from streamlit_option_menu import option_menu as option_menu
 
 import cost_functions as cfx
