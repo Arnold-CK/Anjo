@@ -1,18 +1,12 @@
 import datetime
-import os
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver import webkitgtk as wkit
-
 
 import altair as alt
 import gspread
 import pandas as pd
 import streamlit as st
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 from millify import millify
 from pytz import timezone
+from selenium.webdriver.chrome.options import Options
 from streamlit_option_menu import option_menu as option_menu
 
 import cost_functions as cfx
@@ -20,6 +14,7 @@ import deposit_functions as dfx
 import general_functions as gfx
 import sales_functions as sfx
 import withdraw_functions as wfx
+import harvest_functions as hfx
 
 gfx.set_page_config()
 
@@ -758,7 +753,8 @@ if authentication_status:
                             )
 
     elif nav_bar == "Harvests":
-        st.subheader("Coming in the next release")
+        harvests_df = hfx.get_harvests_df()
+        st.dataframe(harvests_df, use_container_width=True)
 
     authenticator.logout("Logout", "sidebar", key="unique_key")
 
