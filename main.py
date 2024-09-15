@@ -39,9 +39,9 @@ if authentication_status:
     #     file_id = file.get('id')
     #     return f"https://drive.google.com/uc?id={file_id}"
 
-    chrome_options = Options()
+    #chrome_options = Options()
     # incognito window
-    chrome_options.add_argument("--incognito")
+    #chrome_options.add_argument("--incognito")
 
 
     @st.experimental_dialog("Are you sure?")
