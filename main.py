@@ -490,7 +490,10 @@ if authentication_status:
                                 title="",
                                 scale=alt.Scale(paddingInner=0.4)  # 40% of bandwidth as padding
                             ),
-                            tooltip=["Customer", "Total Price"]
+                            tooltip=[
+                                alt.Tooltip("Customer:N", title="Customer"),
+                                alt.Tooltip("sum(Total Price):Q", title="Total Sales", format=",")
+                            ]
                         )
                         .properties(
                             height=top5.shape[0] * 50  # e.g. 5 bars × 50px = 250px total
