@@ -9,6 +9,7 @@ from pytz import timezone
 from streamlit_option_menu import option_menu as option_menu
 
 import cost_functions as cfx
+import customers_functions as cusfx
 import deposit_functions as dfx
 import general_functions as gfx
 import sales_functions as sfx
@@ -344,6 +345,8 @@ if authentication_status:
 
     elif nav_bar == "Sales":
 
+        customers_list = cusfx.load_customers()
+
         sales_details, sales_dashboard, sales_form = st.tabs(["📝 Details", "💰 Dashboard", "📜 Form"])
 
         final_sales_df = sfx.get_sales_df()
@@ -379,23 +382,25 @@ if authentication_status:
                     customer_df = sfx.process_customer(final_sales_df, customer)
                     sfx.display_expander(customer, customer_df)
 
+            chart_color = "#D4A017"
+
             with sales_dashboard:
-
-                ttl_revenue, ttl_quantity = st.columns(2)
-
+                # 1) KPI row
+                ttl_revenue, avg_sale_price, ttl_quantity, avg_order_qty = st.columns(4)
                 with ttl_revenue:
                     total_revenue = final_sales_df["Total Price"].sum()
-                    st.metric(
-                        "Total Revenue (ugx)",
-                        millify(total_revenue, precision=2),
-                    )
-
+                    st.metric("Total Sales (UGX)", f"{total_revenue:,.0f}")
+                with avg_sale_price:
+                    avg_sale_price = final_sales_df["Unit Price"].mean()
+                    st.metric("Average Sale Price", f"{avg_sale_price:,.0f} UGX")
                 with ttl_quantity:
                     total_quantity = final_sales_df["Quantity"].sum()
-                    st.metric(
-                        "Total Quantity Sold (kgs)",
-                        millify(total_quantity, precision=2),
-                    )
+                    st.metric("Quantity Sold", f"{total_quantity:,.0f} kgs")
+                with avg_order_qty:
+                    avg_quantity = final_sales_df["Quantity"].mean()
+                    st.metric("Average Order Quantity", f"{avg_quantity:,.0f} kgs")
+
+                st.write("")  # small spacer
 
                 visuals_df = pd.DataFrame({
                     "Quantity Sold (kgs)": final_sales_df["Quantity"],
@@ -403,40 +408,116 @@ if authentication_status:
                     "Date": final_sales_df["Date"]
                 })
 
-                st.write("---")
+                # 2) First row: Top 5 & Revenue Trend
+                row1_col1, row1_col2 = st.columns(2, gap="medium")
+                with row1_col1:
+                    st.subheader("📈 Revenue Trend")
+                    # build visuals_df as before…
+                    n_months = visuals_df["Date"].dt.month.nunique()
+                    chart_height = 5 * 50  # same multiplier as your bar chart
 
-                line = (
-                    alt.Chart(visuals_df)
-                    .mark_line()
-                    .encode(
-                        x=alt.X("month(Date):O", title="Month"),
-                        y=alt.Y("sum(Revenue (ugx)):Q", title="Total Revenue (UGX)"),
-                        tooltip=[alt.Tooltip("month(Date):O", title="Month"),
-                                 alt.Tooltip("sum(Revenue (ugx)):Q", title="Total Revenue (UGX)", format=','),
-                                 ]
+                    area = (
+                        alt.Chart(visuals_df)
+                        .mark_area(interpolate="monotone", opacity=0.2, color=chart_color)
+                        .encode(
+                            x=alt.X("month(Date):O", axis=alt.Axis(grid=False)),
+                            y=alt.Y("sum(Revenue (ugx)):Q", axis=alt.Axis(grid=False))
+                        )
                     )
-                )
-
-                points = line.mark_point()
-
-                st.altair_chart(line + points, use_container_width=True)
-
-                st.write("---")
-
-                bar = (
-                    alt.Chart(visuals_df)
-                    .mark_bar()
-                    .encode(
-                        x=alt.X("month(Date):O", title="Month"),
-                        y=alt.Y("sum(Quantity Sold (kgs)):Q", title="Total Quantity Sold (kgs)"),
-                        tooltip=[alt.Tooltip("month(Date):O", title="Month"),
-                                 alt.Tooltip("sum(Quantity Sold (kgs)):Q", title="Total Quantity Sold (kgs)",
-                                             format=','),
-                                 ]
+                    line = (
+                        alt.Chart(visuals_df)
+                        .mark_line(interpolate="monotone", color=chart_color, strokeWidth=2)
+                        .encode(
+                            x=alt.X("month(Date):O", axis=alt.Axis(grid=False)),
+                            y=alt.Y("sum(Revenue (ugx)):Q", axis=alt.Axis(grid=False)),
+                            tooltip=[
+                                alt.Tooltip("month(Date):O", title="Month"),
+                                alt.Tooltip("sum(Revenue (ugx)):Q", title="Total Revenue", format=",")
+                            ]
+                        )
                     )
-                )
+                    points = line.mark_point(size=50, color=chart_color)
 
-                st.altair_chart(bar, use_container_width=True)
+                    trend_chart = (area + line + points).properties(height=chart_height)
+                    st.altair_chart(trend_chart, use_container_width=True)
+
+                with row1_col2:
+                    st.subheader("📊 Quantity Sold by Month")
+                    # build bar_qty as before…
+                    bar_qty = (
+                        alt.Chart(visuals_df)
+                        .mark_bar(color=chart_color, size=20)
+                        .encode(
+                            x=alt.X(
+                                "month(Date):O",
+                                scale=alt.Scale(paddingInner=0.4)
+                            ),
+                            y="sum(Quantity Sold (kgs)):Q",
+                            tooltip=[
+                                alt.Tooltip("month(Date):O", title="Month"),
+                                alt.Tooltip("sum(Quantity Sold (kgs)):Q", title="Total Kgs", format=",")
+                            ]
+                        )
+                    ).properties(height=chart_height)
+
+                    st.altair_chart(bar_qty, use_container_width=True)
+
+                st.write("")  # spacer
+
+                # 3) Second row: Quantity bar + DataFrame
+                row2_col1, row2_col2 = st.columns(2, gap="medium")
+                with row2_col1:
+                    st.subheader("🏆 Top 5 Customers")
+                    top5 = (
+                        final_sales_df
+                        .groupby("Customer")["Total Price"]
+                        .sum()
+                        .nlargest(5)
+                        .reset_index()
+                    )
+                    bar_top5 = (
+                        alt.Chart(top5)
+                        .mark_bar(
+                            cornerRadiusTopLeft=3,
+                            cornerRadiusBottomLeft=3,
+                            size=20  # bar thickness
+                        )
+                        .encode(
+                            x=alt.X("Total Price:Q", title="Sales"),
+                            y=alt.Y(
+                                "Customer:N",
+                                sort="-x",
+                                title="",
+                                scale=alt.Scale(paddingInner=0.4)  # 40% of bandwidth as padding
+                            ),
+                            tooltip=["Customer", "Total Price"]
+                        )
+                        .properties(
+                            height=top5.shape[0] * 50  # e.g. 5 bars × 50px = 250px total
+                        )
+                        .configure_mark(color=chart_color)
+                    )
+
+                    st.altair_chart(bar_top5, use_container_width=True)
+
+                with row2_col2:
+                    st.subheader("🗂️ Raw Data")
+                    # 1) Copy & select columns
+                    df_display = final_sales_df[["Date", "Customer", "Unit Price", "Quantity", "Total Price"]].copy()
+
+                    # 2) Keep only the date part
+                    df_display["Date"] = pd.to_datetime(df_display["Date"]).dt.date
+
+                    # 3) Sort newest first
+                    df_display = df_display.sort_values("Date", ascending=False)
+
+                    # 4) Reset to a 1‐based “No” index
+                    df_display = df_display.reset_index(drop=True)
+                    df_display.index = df_display.index + 1
+                    df_display.index.name = "No."
+
+                    # 5) Show it
+                    st.dataframe(df_display, use_container_width=True)
 
         with sales_form:
             st.title(":green[Sales]")
@@ -454,11 +535,12 @@ if authentication_status:
                                          )
 
                 with x2:
-                    customer = st.text_input(
-                        placeholder="eg: vicky tindi",
-                        label="Customer",
-                        disabled=False
-                    )
+                    # customer = st.text_input(
+                    #     placeholder="eg: vicky tindi",
+                    #     label="Customer",
+                    #     disabled=False
+                    # )
+                    customer = st.selectbox(label="Customer", options=customers_list, placeholder="Select Customer", index=None)
 
                 with x3:
                     size = st.selectbox(label="Size", options=sfx.get_sizes())
