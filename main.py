@@ -5,8 +5,8 @@ import gspread
 import pandas as pd
 import streamlit as st
 from millify import millify
-from pytz import timezone
-from streamlit_option_menu import option_menu as option_menu
+from pytz import timezone as tz
+from streamlit_option_menu import option_menu
 
 import cost_functions as cfx
 import customers_functions as cusfx
@@ -16,154 +16,117 @@ import sales_functions as sfx
 import withdraw_functions as wfx
 import harvest_functions as hfx
 
+# ---- Page & Auth ----
 gfx.set_page_config()
 
 name, authentication_status, username, authenticator = gfx.auth()
+
 if authentication_status:
 
-    # # Define the scope
-    # scope = ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/spreadsheets"]
-    #
-    # # Load the credentials
-    # creds = Credentials.from_service_account_file("", scopes=scope)
-    #
-    # # Connect to Google Sheets
-    # client = gspread.authorize(creds)
-    # # sheet = client.open("your_google_sheet_name").sheet1
-    #
-    # drive_service = build('drive', 'v3', credentials=creds)
-    #
-    # def upload_to_drive(file, file_name):
-    #     file_metadata = {'name': file_name}
-    #     media = MediaFileUpload(file_name, resumable=True, mimetype="image/png")
-    #     file = drive_service.files().create(body=file,media_body=media, fields='id').execute()
-    #     file_id = file.get('id')
-    #     return f"https://drive.google.com/uc?id={file_id}"
-
-    #chrome_options = Options()
-    # incognito window
-    #chrome_options.add_argument("--incognito")
-
-
-    @st.experimental_dialog("Are you sure?")
-    def user_surety():
-        st.warning("Are you sure these numbers are correct?")
-        col1, col2 = st.columns(2)
-
-        with col1:
-            yes_clicked = st.button("Yes", key="yes_button", use_container_width=True)
-        with col2:
-            no_clicked = st.button("No", key="no_button", use_container_width=True)
-
-        if yes_clicked:
-            return "yes"
-        elif no_clicked:
-            return "no"
-
-
-    if 'date_range_toggle' not in st.session_state:
+    # ---- Session State Defaults ----
+    if "date_range_toggle" not in st.session_state:
         st.session_state["date_range_toggle"] = False
 
-    if 'nav_bar_selection' not in st.session_state:
+    if "nav_bar_selection" not in st.session_state:
         st.session_state["nav_bar_selection"] = "Costs"
 
-    if 'quantity' not in st.session_state:
+    if "nav_bar" not in st.session_state:
+        st.session_state["nav_bar"] = "Costs"
+
+    if "quantity" not in st.session_state:
         st.session_state["quantity"] = 0
 
-    if 'unit-price' not in st.session_state:
+    if "unit-price" not in st.session_state:
         st.session_state["unit-price"] = 0
 
-    if 'total-price' not in st.session_state:
+    if "total-price" not in st.session_state:
         st.session_state["total-price"] = 0
 
-
+    # ---- Helpers ----
     def calculate_total_price():
+        """Safely compute Quantity * Unit Price from session_state (handles blanks/commas)."""
         try:
-            sale_quantity = int(st.session_state['quantity'])
-            sale_unit_price = int(st.session_state['unit-price'])
-            st.session_state["total-price"] = (sale_quantity * sale_unit_price)
-            return sale_quantity * sale_unit_price
-        except ValueError:
-            return 0
+            q = str(st.session_state.get("quantity", 0)).replace(",", "").strip()
+            p = str(st.session_state.get("unit-price", 0)).replace(",", "").strip()
+            q = int(float(q)) if q else 0
+            p = int(float(p)) if p else 0
+            total = q * p
+        except Exception:
+            total = 0
+        st.session_state["total-price"] = total
+        return total
 
-
-    # st.write(st.session_state)
-
+    # Secrets / Sheets client
     sheet_credentials = st.secrets["sheet_credentials"]
     gc = gspread.service_account_from_dict(sheet_credentials)
     current_user = st.session_state["name"]
 
-
-    def change_nav_bar_state_selection(selected_option: str):
-        st.session_state.nav_bar = selected_option
-
+    # ---- Sidebar ----
 
     with st.sidebar:
+        # keep your lists
+        options = ["Costs", "Sales", "Harvests", "Deposits", "Withdraws"]
+        icons = ["bar-chart-line", "coin", "flower3", "node-plus", "node-minus"]
 
+        # pick default index from session_state (safe fallback to 0)
+        default_index = options.index(st.session_state["nav_bar_selection"]) \
+            if st.session_state.get("nav_bar_selection") in options else 0
+
+        # ✅ Correct usage: menu_title is the 1st positional arg; no `key`, no `title=`
         nav_bar = option_menu(
-            current_user,
-            ["Costs", "Sales", "Harvests", "Deposits", "Withdraws"],
-            icons=["bar-chart-line", "coin", "flower3", "node-plus", "node-minus"],
+            current_user,  # menu_title
+            options,  # options
+            icons=icons,  # optional
             menu_icon="person-circle",
-            key="nav_bar_selection",
-            on_change=change_nav_bar_state_selection(st.session_state["nav_bar_selection"]),
-
+            default_index=default_index,
+            # orientation="vertical"  # (optional) default is vertical in sidebar
         )
 
-        # disable_status = st.toggle("Enable", value=True)
-        # st.multiselect("Select", options=[i for i in range(10)], disabled=not disable_status)
+        # mirror into session_state so rest of your code reads a single source of truth
+        st.session_state["nav_bar_selection"] = nav_bar
+        st.session_state["nav_bar"] = nav_bar
 
         with st.expander("Filters", expanded=True):
             years, months, cost_categories, customers, start_date, end_date = gfx.show_filters(
-                nav_bar_selection=st.session_state["nav_bar"])
-
+                nav_bar_selection=st.session_state["nav_bar"]
+            )
             months = [k for k, v in gfx.get_month_name_dict().items() if v in months]
 
             if end_date and not start_date:
                 st.error("Cannot have an end date without a start date")
                 st.stop()
-
-            if start_date and end_date:
-                if start_date > end_date:
-                    st.error("Selected start date should be less than the end date")
-                    st.stop()
+            if start_date and end_date and start_date > end_date:
+                st.error("Selected start date should be less than the end date")
+                st.stop()
 
         st.divider()
 
+    # ===================== COSTS =====================
     if nav_bar == "Costs":
         details, dashboard, costs_form = st.tabs(["📝 Details", "💰 Dashboard", "📜 Form"])
 
         anjo_workbook = gc.open_by_key(st.secrets["cost_sheet_key"])
-
         expenses_sheet = anjo_workbook.worksheet("Costs")
-
         expenses_df = cfx.load_expense_data(expenses_sheet)
 
-        expenses_df = cfx.filter_data(expenses_df, 'years', years)
-        expenses_df = cfx.filter_data(expenses_df, 'months', months)
+        expenses_df = cfx.filter_data(expenses_df, "years", years)
+        expenses_df = cfx.filter_data(expenses_df, "months", months)
         expenses_df = cfx.filter_data(expenses_df, "cost_categories", cost_categories)
-        expenses_df = cfx.filter_data(expenses_df, 'start_date', start_date)
-        expenses_df = cfx.filter_data(expenses_df, 'end_date', end_date)
+        expenses_df = cfx.filter_data(expenses_df, "start_date", start_date)
+        expenses_df = cfx.filter_data(expenses_df, "end_date", end_date)
 
         if current_user != "Victor Tindimwebwa":
-
             with details:
-
                 if expenses_df.empty:
                     st.info("No records match the filtration criteria")
-                    # st.stop()
-
                 st.subheader("Costs by Categories")
-
-                df_cost_categories = expenses_df["Cost Category"].unique()
+                df_cost_categories = expenses_df["Cost Category"].dropna().unique()
                 df_cost_categories.sort()
-
                 for category in df_cost_categories:
                     category_df = cfx.process_category(expenses_df, category)
                     cfx.display_expander(category, category_df)
 
             with dashboard:
-
                 visuals_df = pd.DataFrame({
                     "Category": expenses_df["Cost Category"],
                     "Cost (ugx)": expenses_df["Total Cost"],
@@ -171,34 +134,27 @@ if authentication_status:
                 })
 
                 cost_metrics, pie_chart = st.columns([1, 2])
-
                 with cost_metrics:
-                    total_costs = expenses_df["Total Cost"].sum()
-                    st.metric(
-                        "Total Costs",
-                        millify(total_costs, precision=2),
-                    )
-
-                    number_of_months = expenses_df['Date'].dt.month.nunique()
-
+                    total_costs = float(visuals_df["Cost (ugx)"].sum()) if not visuals_df.empty else 0.0
+                    st.metric("Total Costs", millify(total_costs, precision=2))
+                    number_of_months = visuals_df["Date"].dt.month.nunique() if not visuals_df.empty else 0
                     average_monthly_cost = total_costs / number_of_months if number_of_months > 0 else 0
-
                     st.metric("Average monthly Cost", millify(average_monthly_cost, precision=2))
 
-                    # st.metric("Cost per Unit", millify(total_costs, precision=2))
-
-                    # st.metric("Cost of Goods Sold", millify(total_costs, precision=2))
-
                 with pie_chart:
-                    pie_chart = alt.Chart(visuals_df).mark_arc(innerRadius=80).encode(
-                        theta="sum(Cost (ugx))",
-                        color="Category",
-                        tooltip=[alt.Tooltip("Category", title="Category"),
-                                 alt.Tooltip("sum(Cost (ugx))", title="Total Cost (UGX)", format=','),
-                                 ]
+                    pie = (
+                        alt.Chart(visuals_df)
+                        .mark_arc(innerRadius=80)
+                        .encode(
+                            theta="sum(Cost (ugx))",
+                            color="Category",
+                            tooltip=[
+                                alt.Tooltip("Category", title="Category"),
+                                alt.Tooltip("sum(Cost (ugx))", title="Total Cost (UGX)", format=","),
+                            ],
+                        )
                     )
-
-                    st.altair_chart(pie_chart, use_container_width=True)
+                    st.altair_chart(pie, use_container_width=True)
 
                 st.write("---")
 
@@ -208,106 +164,79 @@ if authentication_status:
                     .encode(
                         x=alt.X("month(Date):O", title="Month"),
                         y=alt.Y("sum(Cost (ugx)):Q", title="Total Cost (UGX)"),
-                        tooltip=[alt.Tooltip("month(Date):O", title="Month"),
-                                 alt.Tooltip("sum(Cost (ugx)):Q", title="Total Cost (UGX)", format=','),
-                                 ]
+                        tooltip=[
+                            alt.Tooltip("month(Date):O", title="Month"),
+                            alt.Tooltip("sum(Cost (ugx)):Q", title="Total Cost (UGX)", format=","),
+                        ],
                     )
                 )
-
                 points = line.mark_point()
-
                 st.altair_chart(line + points, use_container_width=True)
 
-                stacked_chart = alt.Chart(visuals_df).mark_bar().encode(
-                    x=alt.X("month(Date):O", title="Month"),
-                    y=alt.Y("sum(Cost (ugx)):Q", title="Total Cost (UGX)"),
-                    color=alt.Color("Category:N"),
-                    tooltip=[alt.Tooltip("month(Date):O", title="Month"),
-                             alt.Tooltip("Category", title="Category"),
-                             alt.Tooltip("sum(Cost (ugx)):Q", title="Total Cost (UGX)", format=',')
-                             ]
+                stacked = (
+                    alt.Chart(visuals_df)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X("month(Date):O", title="Month"),
+                        y=alt.Y("sum(Cost (ugx)):Q", title="Total Cost (UGX)"),
+                        color=alt.Color("Category:N"),
+                        tooltip=[
+                            alt.Tooltip("month(Date):O", title="Month"),
+                            alt.Tooltip("Category", title="Category"),
+                            alt.Tooltip("sum(Cost (ugx)):Q", title="Total Cost (UGX)", format=","),
+                        ],
+                    )
                 )
-
-                st.altair_chart(stacked_chart, use_container_width=True)
+                st.altair_chart(stacked, use_container_width=True)
 
         with costs_form:
             st.title(":red[Costs]")
 
             with st.form(key="costs"):
-                c1, c2 = st.columns(2, vertical_alignment="bottom")
-                c3, c4 = st.columns(2, vertical_alignment="bottom")
-                c5, c6 = st.columns(2, vertical_alignment="bottom")
-                c7, c8 = st.columns(2, vertical_alignment="bottom")
+                c1, c2 = st.columns(2)
+                c3, c4 = st.columns(2)
+                c5, c6 = st.columns(2)
+                c7, c8 = st.columns(2)
 
                 with c1:
-                    date = st.date_input("Date (dd/mm/yyyy)", value=datetime.datetime.now(), format="DD/MM/YYYY",
-                                         max_value=datetime.datetime.now(),
-                                         min_value=datetime.date(2022, 8, 1),
-                                         )
-
+                    date = st.date_input(
+                        "Date (dd/mm/yyyy)",
+                        value=datetime.datetime.now(),
+                        format="DD/MM/YYYY",
+                        max_value=datetime.datetime.now(),
+                        min_value=datetime.date(2022, 8, 1),
+                    )
                 with c2:
-                    category = st.selectbox(label="Category", index=None,
-                                            options=cfx.get_cost_categories())
-
+                    category = st.selectbox(label="Category", index=None, options=cfx.get_cost_categories())
                 with c3:
-                    item = st.text_input(
-                        placeholder="airtime",
-                        label="Item",
-                        disabled=False
-                    )
-
+                    item = st.text_input(placeholder="airtime", label="Item")
                 with c4:
-                    cost_quantity = st.text_input(
-                        label="Quantity",
-                        disabled=False
-                    )
-
+                    cost_quantity = st.text_input(label="Quantity")
                 with c5:
-                    unit_cost = st.text_input(
-                        key="unit-cost",
-                        placeholder="ugx",
-                        label="Unit Cost",
-                        disabled=False
-                    )
-
+                    unit_cost = st.text_input(key="unit-cost", placeholder="ugx", label="Unit Cost")
                 with c6:
-                    total_cost = st.text_input(
-                        placeholder="ugx",
-                        label="Total Cost",
-                        disabled=False
-                    )
-
+                    total_cost = st.text_input(placeholder="ugx", label="Total Cost")
                 with c7:
-                    transport_cost = st.text_input(
-                        placeholder="ugx",
-                        label="Transport Cost (if any)",
-                        disabled=False
-                    )
-
+                    transport_cost = st.text_input(placeholder="ugx", label="Transport Cost (if any)")
                 with c8:
                     transport_details = st.text_input(
-                        placeholder="eg: from seeta to farm",
-                        label="Transport Details (if any)",
-                        disabled=False
+                        placeholder="eg: from seeta to farm", label="Transport Details (if any)"
                     )
 
-                source_of_funds = st.selectbox("Source of Money", ["Bank", "Personal", "Sales"]
-                if current_user == "Andrew" or current_user == "Tony" else ["Bank", "Sales"])
+                source_of_funds = st.selectbox(
+                    "Source of Money",
+                    ["Bank", "Personal", "Sales"] if current_user in {"Andrew", "Tony"} else ["Bank", "Sales"],
+                )
 
                 cost_submitted = st.form_submit_button("Save")
 
                 if cost_submitted:
-                    timezone = timezone("Africa/Nairobi")
-
-                    # amount_deposited = int(amount.strip())
-
-                    timestamp = datetime.datetime.now(timezone).strftime(
-                        "%d-%b-%Y %H:%M:%S" + " EAT"
-                    )
+                    tz_eat = tz("Africa/Nairobi")
+                    timestamp = datetime.datetime.now(tz_eat).strftime("%d-%b-%Y %H:%M:%S EAT")
 
                     data = [
                         timestamp,
-                        date.strftime('%d/%m/%y'),
+                        date.strftime("%d/%m/%y"),
                         item,
                         category,
                         "",
@@ -318,110 +247,79 @@ if authentication_status:
                         transport_cost,
                         transport_details,
                         source_of_funds,
-                        current_user
+                        current_user,
                     ]
 
                     with st.spinner("Saving cost data..."):
-                        sheet_credentials = st.secrets["sheet_credentials"]
-                        gc = gspread.service_account_from_dict(sheet_credentials)
-
                         pepper_workbook = gc.open_by_key(st.secrets["cost_sheet_key"])
-                        deposits_sheet = pepper_workbook.worksheet("Costs")
-
-                        all_values = deposits_sheet.get_all_values()
-
-                        next_row_index = len(all_values) + 1
-
-                        deposits_sheet.append_rows(
+                        costs_sheet = pepper_workbook.worksheet("Costs")
+                        next_row_index = len(costs_sheet.get_all_values()) + 1
+                        costs_sheet.append_rows(
                             [data],
                             value_input_option="user_entered",
                             insert_data_option="insert_rows",
                             table_range=f"a{next_row_index}",
                         )
+                        st.success("✅ Cost saved Successfully")
 
-                        st.success(
-                            "✅ Cost saved Successfully"
-                        )
-
+    # ===================== SALES =====================
     elif nav_bar == "Sales":
-
         customers_list = cusfx.load_customers()
-
         sales_details, sales_dashboard, sales_form = st.tabs(["📝 Details", "💰 Dashboard", "📜 Form"])
 
         final_sales_df = sfx.get_sales_df()
-
-        # TODO:
-        # Turn this into a function that takes in the df, and a dictionary of column names and values
-        # Annotate all functions to clearly show the data types of the attributes plus what they return
-        # Create functions to handle the costs
-        # Put files in folders where need be
-        # Transfer data from old sheets
-        # Put all data being read by the app in one sheet
-
-        final_sales_df = sfx.filter_data(final_sales_df, 'years', years)
-        final_sales_df = sfx.filter_data(final_sales_df, 'months', months)
-        final_sales_df = sfx.filter_data(final_sales_df, 'customers', customers)
-        final_sales_df = sfx.filter_data(final_sales_df, 'start_date', start_date)
-        final_sales_df = sfx.filter_data(final_sales_df, 'end_date', end_date)
+        final_sales_df = sfx.filter_data(final_sales_df, "years", years)
+        final_sales_df = sfx.filter_data(final_sales_df, "months", months)
+        final_sales_df = sfx.filter_data(final_sales_df, "customers", customers)
+        final_sales_df = sfx.filter_data(final_sales_df, "start_date", start_date)
+        final_sales_df = sfx.filter_data(final_sales_df, "end_date", end_date)
 
         if current_user != "Victor Tindimwebwa":
-
             with sales_details:
                 if final_sales_df.empty:
                     st.info("No records match the filtration criteria")
-                    # st.stop()
-
                 st.subheader("Sales by Customers")
-
-                df_customers = final_sales_df["Customer"].unique()
-                # df_customers = [str(customer) if pd.notnull(customer) else '' for customer in df_customers]
+                df_customers = final_sales_df["Customer"].dropna().unique()
                 df_customers.sort()
-
                 for customer in df_customers:
                     customer_df = sfx.process_customer(final_sales_df, customer)
                     sfx.display_expander(customer, customer_df)
 
             chart_color = "#D4A017"
-
             with sales_dashboard:
-                # 1) KPI row
+                # KPIs
                 ttl_revenue, avg_sale_price, ttl_quantity, avg_order_qty = st.columns(4)
                 with ttl_revenue:
-                    total_revenue = final_sales_df["Total Price"].sum()
+                    total_revenue = float(final_sales_df["Total Price"].sum()) if not final_sales_df.empty else 0.0
                     st.metric("Total Sales (UGX)", f"{total_revenue:,.0f}")
                 with avg_sale_price:
-                    avg_sale_price = final_sales_df["Unit Price"].mean()
-                    st.metric("Average Sale Price", f"{avg_sale_price:,.0f} UGX")
+                    avg_sale_price_val = float(final_sales_df["Unit Price"].mean()) if not final_sales_df.empty else 0.0
+                    st.metric("Average Sale Price", f"{avg_sale_price_val:,.0f} UGX")
                 with ttl_quantity:
-                    total_quantity = final_sales_df["Quantity"].sum()
+                    total_quantity = float(final_sales_df["Quantity"].sum()) if not final_sales_df.empty else 0.0
                     st.metric("Quantity Sold", f"{total_quantity:,.0f} kgs")
                 with avg_order_qty:
-                    avg_quantity = final_sales_df["Quantity"].mean()
+                    avg_quantity = float(final_sales_df["Quantity"].mean()) if not final_sales_df.empty else 0.0
                     st.metric("Average Order Quantity", f"{avg_quantity:,.0f} kgs")
 
-                st.write("")  # small spacer
-
+                st.write("")
                 visuals_df = pd.DataFrame({
                     "Quantity Sold (kgs)": final_sales_df["Quantity"],
                     "Revenue (ugx)": final_sales_df["Total Price"],
-                    "Date": final_sales_df["Date"]
+                    "Date": final_sales_df["Date"],
                 })
 
-                # 2) First row: Top 5 & Revenue Trend
-                row1_col1, row1_col2 = st.columns(2, gap="medium")
+                # Row 1: Revenue trend
+                row1_col1, row1_col2 = st.columns(2)
                 with row1_col1:
                     st.subheader("📈 Revenue Trend")
-                    # build visuals_df as before…
-                    n_months = visuals_df["Date"].dt.month.nunique()
-                    chart_height = 5 * 50  # same multiplier as your bar chart
-
+                    chart_height = 5 * 50
                     area = (
                         alt.Chart(visuals_df)
                         .mark_area(interpolate="monotone", opacity=0.2, color=chart_color)
                         .encode(
                             x=alt.X("month(Date):O", axis=alt.Axis(grid=False)),
-                            y=alt.Y("sum(Revenue (ugx)):Q", axis=alt.Axis(grid=False))
+                            y=alt.Y("sum(Revenue (ugx)):Q", axis=alt.Axis(grid=False)),
                         )
                     )
                     line = (
@@ -432,187 +330,109 @@ if authentication_status:
                             y=alt.Y("sum(Revenue (ugx)):Q", axis=alt.Axis(grid=False)),
                             tooltip=[
                                 alt.Tooltip("month(Date):O", title="Month"),
-                                alt.Tooltip("sum(Revenue (ugx)):Q", title="Total Revenue", format=",")
-                            ]
+                                alt.Tooltip("sum(Revenue (ugx)):Q", title="Total Revenue", format=","),
+                            ],
                         )
                     )
                     points = line.mark_point(size=50, color=chart_color)
-
-                    trend_chart = (area + line + points).properties(height=chart_height)
-                    st.altair_chart(trend_chart, use_container_width=True)
+                    st.altair_chart((area + line + points).properties(height=chart_height), use_container_width=True)
 
                 with row1_col2:
                     st.subheader("📊 Quantity Sold by Month")
-                    # build bar_qty as before…
                     bar_qty = (
                         alt.Chart(visuals_df)
                         .mark_bar(color=chart_color, size=20)
                         .encode(
-                            x=alt.X(
-                                "month(Date):O",
-                                scale=alt.Scale(paddingInner=0.4)
-                            ),
+                            x=alt.X("month(Date):O", scale=alt.Scale(paddingInner=0.4)),
                             y="sum(Quantity Sold (kgs)):Q",
                             tooltip=[
                                 alt.Tooltip("month(Date):O", title="Month"),
-                                alt.Tooltip("sum(Quantity Sold (kgs)):Q", title="Total Kgs", format=",")
-                            ]
+                                alt.Tooltip("sum(Quantity Sold (kgs)):Q", title="Total Kgs", format=","),
+                            ],
                         )
                     ).properties(height=chart_height)
-
                     st.altair_chart(bar_qty, use_container_width=True)
 
-                st.write("")  # spacer
-
-                # 3) Second row: Quantity bar + DataFrame
-                row2_col1, row2_col2 = st.columns(2, gap="medium")
+                st.write("")
+                # Row 2: Top 5 + Table
+                row2_col1, row2_col2 = st.columns(2)
                 with row2_col1:
                     st.subheader("🏆 Top 5 Customers")
                     top5 = (
-                        final_sales_df
-                        .groupby("Customer")["Total Price"]
+                        final_sales_df.groupby("Customer")["Total Price"]
                         .sum()
                         .nlargest(5)
                         .reset_index()
                     )
                     bar_top5 = (
                         alt.Chart(top5)
-                        .mark_bar(
-                            cornerRadiusTopLeft=3,
-                            cornerRadiusBottomLeft=3,
-                            size=20  # bar thickness
-                        )
+                        .mark_bar(cornerRadiusTopLeft=3, cornerRadiusBottomLeft=3, size=20)
                         .encode(
                             x=alt.X("Total Price:Q", title="Sales"),
-                            y=alt.Y(
-                                "Customer:N",
-                                sort="-x",
-                                title="",
-                                scale=alt.Scale(paddingInner=0.4)  # 40% of bandwidth as padding
-                            ),
+                            y=alt.Y("Customer:N", sort="-x", title="", scale=alt.Scale(paddingInner=0.4)),
                             tooltip=[
                                 alt.Tooltip("Customer:N", title="Customer"),
-                                alt.Tooltip("sum(Total Price):Q", title="Total Sales", format=",")
-                            ]
+                                alt.Tooltip("Total Price:Q", title="Total Sales", format=","),
+                            ],
                         )
-                        .properties(
-                            height=top5.shape[0] * 50  # e.g. 5 bars × 50px = 250px total
-                        )
+                        .properties(height=top5.shape[0] * 50)
                         .configure_mark(color=chart_color)
                     )
-
                     st.altair_chart(bar_top5, use_container_width=True)
 
                 with row2_col2:
                     st.subheader("🗂️ Raw Data")
-                    # 1) Copy & select columns
                     df_display = final_sales_df[["Date", "Customer", "Unit Price", "Quantity", "Total Price"]].copy()
-
-                    # 2) Keep only the date part
                     df_display["Date"] = pd.to_datetime(df_display["Date"]).dt.date
-
-                    # 3) Sort newest first
-                    df_display = df_display.sort_values("Date", ascending=False)
-
-                    # 4) Reset to a 1‐based “No” index
-                    df_display = df_display.reset_index(drop=True)
+                    df_display = df_display.sort_values("Date", ascending=False).reset_index(drop=True)
                     df_display.index = df_display.index + 1
                     df_display.index.name = "No."
-
-                    # 5) Show it
                     st.dataframe(df_display, use_container_width=True)
 
         with sales_form:
             st.title(":green[Sales]")
-
             with st.form(key="sales"):
-                x1, x2 = st.columns(2, vertical_alignment="bottom")
-                x3, x4 = st.columns(2, vertical_alignment="bottom")
-                x5, x6 = st.columns(2, vertical_alignment="bottom")
-                x7, x8 = st.columns(2, vertical_alignment="bottom")
+                x1, x2 = st.columns(2)
+                x3, x4 = st.columns(2)
+                x5, x6 = st.columns(2)
+                x7, x8 = st.columns(2)
 
                 with x1:
-                    date = st.date_input("Date (dd/mm/yyyy)", value=datetime.datetime.now(), format="DD/MM/YYYY",
-                                         max_value=datetime.datetime.now(),
-                                         min_value=datetime.date(2022, 8, 1),
-                                         )
-
+                    date = st.date_input(
+                        "Date (dd/mm/yyyy)",
+                        value=datetime.datetime.now(),
+                        format="DD/MM/YYYY",
+                        max_value=datetime.datetime.now(),
+                        min_value=datetime.date(2022, 8, 1),
+                    )
                 with x2:
-                    # customer = st.text_input(
-                    #     placeholder="eg: vicky tindi",
-                    #     label="Customer",
-                    #     disabled=False
-                    # )
-                    customer = st.selectbox(label="Customer", options=customers_list, placeholder="Select Customer", index=None)
-
+                    customer = st.selectbox(
+                        label="Customer", options=customers_list, placeholder="Select Customer", index=None
+                    )
                 with x3:
                     size = st.selectbox(label="Size", options=sfx.get_sizes())
-
                 with x4:
                     unit = st.selectbox(label="Unit", options=sfx.get_units())
-
                 with x5:
-                    quantity = st.text_input(
-                        value=1,
-                        key="quantity",
-                        placeholder="0",
-                        label="Quantity",
-                        disabled=False,
-                        # help="Please enter a value greater than zero"
-                    )
-
+                    quantity = st.text_input(value=1, key="quantity", placeholder="0", label="Quantity")
                 with x6:
-                    unit_price = st.text_input(
-                        value=1,
-                        key="unit-price",
-                        placeholder="ugx",
-                        label="Unit Price",
-                        disabled=False,
-                        # help="Please enter a value greater than zero"
-                    )
-
+                    unit_price = st.text_input(value=1, key="unit-price", placeholder="ugx", label="Unit Price")
                 with x7:
-                    total_price = st.number_input(
-                        placeholder="ugx",
-                        label="Total Price",
-                        disabled=True,
-                        value=calculate_total_price()
-
-                    )
-
+                    total_price = st.number_input(label="Total Price", disabled=True, value=calculate_total_price())
                 with x8:
-                    amount_paid = st.text_input(
-                        key="amount_paid",
-                        placeholder="0",
-                        label="Amount Paid",
-                        disabled=False,
-                        # help="Please enter a value greater than zero"
-                    )
+                    amount_paid = st.text_input(key="amount_paid", placeholder="0", label="Amount Paid")
 
-                delivery_fee = st.text_input(
-                    key="delivery",
-                    placeholder="0",
-                    label="Delivery Fee",
-                    disabled=False,
-                    # help="Please enter a value greater than zero"
-                )
+                delivery_fee = st.text_input(key="delivery", placeholder="0", label="Delivery Fee")
 
                 sale_submitted = st.form_submit_button("Save", on_click=calculate_total_price)
 
-                # payment_status = st.selectbox(label="Payment Status")
-
                 if sale_submitted:
-                    timezone = timezone("Africa/Nairobi")
-
-                    # amount_deposited = int(amount.strip())
-
-                    timestamp = datetime.datetime.now(timezone).strftime(
-                        "%d-%b-%Y %H:%M:%S" + " EAT"
-                    )
+                    tz_eat = tz("Africa/Nairobi")
+                    timestamp = datetime.datetime.now(tz_eat).strftime("%d-%b-%Y %H:%M:%S EAT")
 
                     data = [
                         timestamp,
-                        date.strftime('%d/%m/%y'),
+                        date.strftime("%d/%m/%y"),
                         customer,
                         size,
                         unit,
@@ -622,224 +442,143 @@ if authentication_status:
                         "payment_status is being dropped",
                         amount_paid,
                         delivery_fee,
-                        current_user
+                        current_user,
                     ]
 
                     with st.spinner("Saving sale data..."):
-                        sheet_credentials = st.secrets["sheet_credentials"]
-                        gc = gspread.service_account_from_dict(sheet_credentials)
-
                         pepper_workbook = gc.open_by_url(st.secrets["sales_sheet_key"])
-                        deposits_sheet = pepper_workbook.worksheet("Final Sales")
-
-                        all_values = deposits_sheet.get_all_values()
-
-                        next_row_index = len(all_values) + 1
-
-                        deposits_sheet.append_rows(
+                        sales_sheet = pepper_workbook.worksheet("Final Sales")
+                        next_row_index = len(sales_sheet.get_all_values()) + 1
+                        sales_sheet.append_rows(
                             [data],
                             value_input_option="user_entered",
                             insert_data_option="insert_rows",
                             table_range=f"a{next_row_index}",
                         )
+                        st.success("✅ Sale saved Successfully")
 
-                        st.success(
-                            "✅ Sale saved Successfully"
-                        )
-
+    # ===================== DEPOSITS =====================
     elif nav_bar == "Deposits":
         deposits, deposit_form = st.tabs(["➕ Deposits", "📜 Form"])
 
         deposits_df = dfx.load_deposits()
-
-        deposits_df = dfx.filter_data(deposits_df, 'years', years)
-        deposits_df = dfx.filter_data(deposits_df, 'months', months)
-        deposits_df = dfx.filter_data(deposits_df, 'start_date', start_date)
-        deposits_df = dfx.filter_data(deposits_df, 'end_date', end_date)
+        deposits_df = dfx.filter_data(deposits_df, "years", years)
+        deposits_df = dfx.filter_data(deposits_df, "months", months)
+        deposits_df = dfx.filter_data(deposits_df, "start_date", start_date)
+        deposits_df = dfx.filter_data(deposits_df, "end_date", end_date)
 
         if current_user != "Victor Tindimwebwa":
-
             with deposits:
-
                 if deposits_df.empty:
                     st.info("No records match the filtration criteria")
-                    # st.stop()
-
-                # Extract unique months (as Period objects)
-                unique_months = deposits_df['Date'].dt.month_name().unique()
-
-                # Convert to a list of strings
-                unique_months_list = unique_months.tolist()
-
+                unique_months_list = deposits_df["Date"].dt.month_name().unique().tolist()
                 for month in unique_months_list:
                     month_df = dfx.process_deposit_month(deposits_df, month)
                     dfx.display_expander(month, month_df)
 
         with deposit_form:
-
             st.title(":green[Deposits]")
-
             with st.form(key="deposits", clear_on_submit=True):
-                date = st.date_input("Date (dd/mm/yyyy)", value=None, format="DD/MM/YYYY",
-                                     max_value=datetime.datetime.now(),
-                                     min_value=datetime.date(2022, 8, 1),
-                                     help="Date **MUST** be before or equal to today")
-
-                amount = st.text_input(
-                    placeholder="ugx",
-                    label="Amount deposited",
-                    disabled=False,
-                    help="Please enter a value greater than zero"
+                date = st.date_input(
+                    "Date (dd/mm/yyyy)",
+                    value=None,
+                    format="DD/MM/YYYY",
+                    max_value=datetime.datetime.now(),
+                    min_value=datetime.date(2022, 8, 1),
+                    help="Date **MUST** be before or equal to today",
                 )
+                amount = st.text_input(placeholder="ugx", label="Amount deposited", help="Enter a value > 0")
 
                 st.info("Uploading an image of the deposit slip will come in the next release!")
 
-                # uploaded_image = st.file_uploader("Upload deposit slip", ['png', 'jpg', 'jpeg'])
-                # if uploaded_image is not None:
-                #     image_bytes = uploaded_image.getvalue()
-                #     file_link = upload_to_drive(image_bytes, uploaded_image.name)
-
-                # imageio = StringIO(uploaded_image.getvalue())
-                # interim = imageio.decode("utf-8")
-                # image = imageio.read()
-
                 submitted = st.form_submit_button("Save")
-
                 if submitted:
-                    timezone = timezone("Africa/Nairobi")
-
-                    # amount_deposited = int(amount.strip())
-
-                    timestamp = datetime.datetime.now(timezone).strftime(
-                        "%d-%b-%Y %H:%M:%S" + " EAT"
-                    )
+                    tz_eat = tz("Africa/Nairobi")
+                    timestamp = datetime.datetime.now(tz_eat).strftime("%d-%b-%Y %H:%M:%S EAT")
 
                     data = [
                         timestamp,
-                        date.strftime('%d/%m/%y'),
-                        int(amount),
+                        date.strftime("%d/%m/%y"),
+                        int(str(amount).replace(",", "").strip() or "0"),
                         current_user,
-                        # file_link
-                        # base64.b64encode(image_bytes).decode('utf-8')
                     ]
 
                     with st.spinner("Saving deposit data..."):
-                        sheet_credentials = st.secrets["sheet_credentials"]
-                        gc = gspread.service_account_from_dict(sheet_credentials)
-
                         pepper_workbook = gc.open_by_key(st.secrets["sheet_key"])
                         deposits_sheet = pepper_workbook.worksheet("Deposits")
-
-                        all_values = deposits_sheet.get_all_values()
-
-                        next_row_index = len(all_values) + 1
-
+                        next_row_index = len(deposits_sheet.get_all_values()) + 1
                         deposits_sheet.append_rows(
                             [data],
                             value_input_option="user_entered",
                             insert_data_option="insert_rows",
                             table_range=f"a{next_row_index}",
                         )
+                        st.success("✅ Deposit Saved Successfully. Feel free to close the application")
 
-                        st.success(
-                            "✅ Deposit Saved Successfully. Feel free to close the application"
-                        )
-
+    # ===================== WITHDRAWS =====================
     elif nav_bar == "Withdraws":
-
         if current_user != "Victor Tindimwebwa":
-
             withdraws, withdraw_form = st.tabs(["➖ Withdraws", "📜 Form"])
 
             withdraw_df = wfx.load_withdraws()
-
-            withdraw_df = wfx.filter_data(withdraw_df, 'years', years)
-            withdraw_df = wfx.filter_data(withdraw_df, 'months', months)
-            withdraw_df = wfx.filter_data(withdraw_df, 'start_date', start_date)
-            withdraw_df = wfx.filter_data(withdraw_df, 'end_date', end_date)
+            withdraw_df = wfx.filter_data(withdraw_df, "years", years)
+            withdraw_df = wfx.filter_data(withdraw_df, "months", months)
+            withdraw_df = wfx.filter_data(withdraw_df, "start_date", start_date)
+            withdraw_df = wfx.filter_data(withdraw_df, "end_date", end_date)
 
             with withdraws:
-
                 if withdraw_df.empty:
                     st.info("No records match the filtration criteria")
-                    # st.stop()
-
-                # Extract unique months (as Period objects)
-                unique_months = withdraw_df['Date'].dt.month_name().unique()
-
-                # Convert to a list of strings
-                unique_months_list = unique_months.tolist()
-
+                unique_months_list = withdraw_df["Date"].dt.month_name().unique().tolist()
                 for month in unique_months_list:
                     month_df = dfx.process_deposit_month(withdraw_df, month)
                     dfx.display_expander(month, month_df)
 
             with withdraw_form:
-
                 st.title(":red[Withdraws]")
-
                 with st.form(key="withdraws", clear_on_submit=True):
-                    date = st.date_input("Date (dd/mm/yyyy)", value=None, format="DD/MM/YYYY",
-                                         max_value=datetime.datetime.now(),
-                                         min_value=datetime.date(2022, 8, 1),
-                                         help="Date **MUST** be before or equal to today")
-
-                    amount = st.text_input(
-                        placeholder="ugx",
-                        label="Amount withdrawn",
-                        disabled=False,
-                        help="Please enter a value greater than zero"
+                    date = st.date_input(
+                        "Date (dd/mm/yyyy)",
+                        value=None,
+                        format="DD/MM/YYYY",
+                        max_value=datetime.datetime.now(),
+                        min_value=datetime.date(2022, 8, 1),
+                        help="Date **MUST** be before or equal to today",
                     )
-
-                    reason_for_withdraw = st.text_input(
-                        placeholder="reason for withdraw",
-                        label="Reason for Withdraw",
-                        disabled=False
-                    )
+                    amount = st.text_input(placeholder="ugx", label="Amount withdrawn", help="Enter a value > 0")
+                    reason_for_withdraw = st.text_input(placeholder="reason for withdraw", label="Reason for Withdraw")
 
                     submitted = st.form_submit_button("Save")
-
                     if submitted:
-                        timezone = timezone("Africa/Nairobi")
-
-                        timestamp = datetime.datetime.now(timezone).strftime(
-                            "%d-%b-%Y %H:%M:%S" + " EAT"
-                        )
+                        tz_eat = tz("Africa/Nairobi")
+                        timestamp = datetime.datetime.now(tz_eat).strftime("%d-%b-%Y %H:%M:%S EAT")
 
                         data = [
                             timestamp,
-                            date.strftime('%d/%b/%Y'),
-                            int(amount),
+                            date.strftime("%d/%b/%Y"),
+                            int(str(amount).replace(",", "").strip() or "0"),
                             reason_for_withdraw,
-                            current_user
+                            current_user,
                         ]
 
                         with st.spinner("Saving withdraw data..."):
-                            sheet_credentials = st.secrets["sheet_credentials"]
-                            gc = gspread.service_account_from_dict(sheet_credentials)
-
                             pepper_workbook = gc.open_by_key(st.secrets["sheet_key"])
-                            deposits_sheet = pepper_workbook.worksheet("Withdraws")
-
-                            all_values = deposits_sheet.get_all_values()
-
-                            next_row_index = len(all_values) + 1
-
-                            deposits_sheet.append_rows(
+                            withdraws_sheet = pepper_workbook.worksheet("Withdraws")
+                            next_row_index = len(withdraws_sheet.get_all_values()) + 1
+                            withdraws_sheet.append_rows(
                                 [data],
                                 value_input_option="user_entered",
                                 insert_data_option="insert_rows",
                                 table_range=f"a{next_row_index}",
                             )
+                            st.success("✅ Withdraw Saved Successfully. Feel free to close the application")
 
-                            st.success(
-                                "✅ Withdraw Saved Successfully. Feel free to close the application"
-                            )
-
+    # ===================== HARVESTS =====================
     elif nav_bar == "Harvests":
         harvests_df = hfx.get_harvests_df()
         st.dataframe(harvests_df, use_container_width=True)
 
+    # ---- Logout ----
     authenticator.logout("Logout", "sidebar", key="unique_key")
 
 elif authentication_status is False:
