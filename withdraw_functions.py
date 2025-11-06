@@ -16,7 +16,7 @@ def load_withdraws():
     withdraw_df = get_as_dataframe(deposits_sheet, parse_dates=True)
 
     withdraw_df.drop(columns=["Timestamp"], inplace=True)
-    withdraw_df['Date'] = pd.to_datetime(withdraw_df['Date'], format='%d/%m/%y')
+    withdraw_df['Date'] = pd.to_datetime(withdraw_df['Date'], format='%d/%b/%Y')
 
     result = withdraw_df.dropna(how='all')
 
@@ -51,7 +51,15 @@ def process_withdraw_month(withdraw_df, month):
 
     # Drop the temporary 'Month' column
     filtered_df = filtered_df.drop(columns=['Month'])
+    
+    # Extract year before formatting the date
+    year = filtered_df["Date"].dt.year.iloc[0] if not filtered_df.empty else ""
+    
     filtered_df["Date"] = filtered_df["Date"].apply(format_date)
+    
+    # Add year as a separate column to pass it along
+    if not filtered_df.empty:
+        filtered_df["_year"] = year
 
     return filtered_df
 
@@ -59,9 +67,15 @@ def process_withdraw_month(withdraw_df, month):
 def display_expander(month, month_df):
     ttl_withdraw = month_df["Amount"].sum()
     formatted_ttl_withdraw = "{:,.0f}".format(ttl_withdraw)
-
-    with st.expander(f'{month} - {formatted_ttl_withdraw} ugx'):
-        st.dataframe(month_df, use_container_width=True)
+    
+    # Get the year from the _year column, or use empty string if not available
+    year = month_df["_year"].iloc[0] if not month_df.empty and "_year" in month_df.columns else ""
+    
+    # Remove the _year column before displaying the dataframe
+    display_df = month_df.drop(columns=["_year"]) if "_year" in month_df.columns else month_df
+    
+    with st.expander(f'{month} {year} - Total Withdrawn: {formatted_ttl_withdraw} UGX'):
+        st.dataframe(display_df, use_container_width=True)
 
 
 def filter_data(data: pd.DataFrame, filter_name: str, values: List[str]) -> pd.DataFrame:
