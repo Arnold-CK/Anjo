@@ -4,6 +4,7 @@ import altair as alt
 import gspread
 import pandas as pd
 import streamlit as st
+from gspread_dataframe import set_with_dataframe
 from millify import millify
 from pytz import timezone as tz
 from streamlit_option_menu import option_menu
@@ -12,9 +13,9 @@ import cost_functions as cfx
 import customers_functions as cusfx
 import deposit_functions as dfx
 import general_functions as gfx
+import harvest_functions as hfx
 import sales_functions as sfx
 import withdraw_functions as wfx
-import harvest_functions as hfx
 
 # ---- Page & Auth ----
 gfx.set_page_config()
@@ -65,12 +66,22 @@ if authentication_status:
 
     with st.sidebar:
         # keep your lists
-        options = ["Costs", "Sales", "Harvests", "Deposits", "Withdraws"]
-        icons = ["bar-chart-line", "coin", "flower3", "node-plus", "node-minus"]
+        options = ["Costs", "Sales", "Harvests", "Customers", "Deposits", "Withdraws"]
+        icons = [
+            "bar-chart-line",
+            "coin",
+            "flower3",
+            "people",
+            "node-plus",
+            "node-minus",
+        ]
 
         # pick default index from session_state (safe fallback to 0)
-        default_index = options.index(st.session_state["nav_bar_selection"]) \
-            if st.session_state.get("nav_bar_selection") in options else 0
+        default_index = (
+            options.index(st.session_state["nav_bar_selection"])
+            if st.session_state.get("nav_bar_selection") in options
+            else 0
+        )
 
         # ✅ Correct usage: menu_title is the 1st positional arg; no `key`, no `title=`
         nav_bar = option_menu(
@@ -87,8 +98,8 @@ if authentication_status:
         st.session_state["nav_bar"] = nav_bar
 
         with st.expander("Filters", expanded=True):
-            years, months, cost_categories, customers, start_date, end_date = gfx.show_filters(
-                nav_bar_selection=st.session_state["nav_bar"]
+            years, months, cost_categories, customers, start_date, end_date = (
+                gfx.show_filters(nav_bar_selection=st.session_state["nav_bar"])
             )
             months = [k for k, v in gfx.get_month_name_dict().items() if v in months]
 
@@ -103,7 +114,9 @@ if authentication_status:
 
     # ===================== COSTS =====================
     if nav_bar == "Costs":
-        details, dashboard, costs_form = st.tabs(["📝 Details", "💰 Dashboard", "📜 Form"])
+        details, dashboard, costs_form = st.tabs(
+            ["📝 Details", "💰 Dashboard", "📜 Form"]
+        )
 
         anjo_workbook = gc.open_by_key(st.secrets["cost_sheet_key"])
         expenses_sheet = anjo_workbook.worksheet("Costs")
@@ -127,19 +140,34 @@ if authentication_status:
                     cfx.display_expander(category, category_df)
 
             with dashboard:
-                visuals_df = pd.DataFrame({
-                    "Category": expenses_df["Cost Category"],
-                    "Cost (ugx)": expenses_df["Total Cost"],
-                    "Date": expenses_df["Date"]
-                })
+                visuals_df = pd.DataFrame(
+                    {
+                        "Category": expenses_df["Cost Category"],
+                        "Cost (ugx)": expenses_df["Total Cost"],
+                        "Date": expenses_df["Date"],
+                    }
+                )
 
                 cost_metrics, pie_chart = st.columns([1, 2])
                 with cost_metrics:
-                    total_costs = float(visuals_df["Cost (ugx)"].sum()) if not visuals_df.empty else 0.0
+                    total_costs = (
+                        float(visuals_df["Cost (ugx)"].sum())
+                        if not visuals_df.empty
+                        else 0.0
+                    )
                     st.metric("Total Costs", millify(total_costs, precision=2))
-                    number_of_months = visuals_df["Date"].dt.month.nunique() if not visuals_df.empty else 0
-                    average_monthly_cost = total_costs / number_of_months if number_of_months > 0 else 0
-                    st.metric("Average monthly Cost", millify(average_monthly_cost, precision=2))
+                    number_of_months = (
+                        visuals_df["Date"].dt.month.nunique()
+                        if not visuals_df.empty
+                        else 0
+                    )
+                    average_monthly_cost = (
+                        total_costs / number_of_months if number_of_months > 0 else 0
+                    )
+                    st.metric(
+                        "Average monthly Cost",
+                        millify(average_monthly_cost, precision=2),
+                    )
 
                 with pie_chart:
                     pie = (
@@ -150,7 +178,11 @@ if authentication_status:
                             color="Category",
                             tooltip=[
                                 alt.Tooltip("Category", title="Category"),
-                                alt.Tooltip("sum(Cost (ugx))", title="Total Cost (UGX)", format=","),
+                                alt.Tooltip(
+                                    "sum(Cost (ugx))",
+                                    title="Total Cost (UGX)",
+                                    format=",",
+                                ),
                             ],
                         )
                     )
@@ -166,7 +198,11 @@ if authentication_status:
                         y=alt.Y("sum(Cost (ugx)):Q", title="Total Cost (UGX)"),
                         tooltip=[
                             alt.Tooltip("month(Date):O", title="Month"),
-                            alt.Tooltip("sum(Cost (ugx)):Q", title="Total Cost (UGX)", format=","),
+                            alt.Tooltip(
+                                "sum(Cost (ugx)):Q",
+                                title="Total Cost (UGX)",
+                                format=",",
+                            ),
                         ],
                     )
                 )
@@ -183,7 +219,11 @@ if authentication_status:
                         tooltip=[
                             alt.Tooltip("month(Date):O", title="Month"),
                             alt.Tooltip("Category", title="Category"),
-                            alt.Tooltip("sum(Cost (ugx)):Q", title="Total Cost (UGX)", format=","),
+                            alt.Tooltip(
+                                "sum(Cost (ugx)):Q",
+                                title="Total Cost (UGX)",
+                                format=",",
+                            ),
                         ],
                     )
                 )
@@ -207,32 +247,45 @@ if authentication_status:
                         min_value=datetime.date(2022, 8, 1),
                     )
                 with c2:
-                    category = st.selectbox(label="Category", index=None, options=cfx.get_cost_categories())
+                    category = st.selectbox(
+                        label="Category", index=None, options=cfx.get_cost_categories()
+                    )
                 with c3:
                     item = st.text_input(placeholder="airtime", label="Item")
                 with c4:
                     cost_quantity = st.text_input(label="Quantity")
                 with c5:
-                    unit_cost = st.text_input(key="unit-cost", placeholder="ugx", label="Unit Cost")
+                    unit_cost = st.text_input(
+                        key="unit-cost", placeholder="ugx", label="Unit Cost"
+                    )
                 with c6:
                     total_cost = st.text_input(placeholder="ugx", label="Total Cost")
                 with c7:
-                    transport_cost = st.text_input(placeholder="ugx", label="Transport Cost (if any)")
+                    transport_cost = st.text_input(
+                        placeholder="ugx", label="Transport Cost (if any)"
+                    )
                 with c8:
                     transport_details = st.text_input(
-                        placeholder="eg: from seeta to farm", label="Transport Details (if any)"
+                        placeholder="eg: from seeta to farm",
+                        label="Transport Details (if any)",
                     )
 
                 source_of_funds = st.selectbox(
                     "Source of Money",
-                    ["Bank", "Personal", "Sales"] if current_user in {"Andrew", "Tony"} else ["Bank", "Sales"],
+                    (
+                        ["Bank", "Personal", "Sales"]
+                        if current_user in {"Andrew", "Tony"}
+                        else ["Bank", "Sales"]
+                    ),
                 )
 
                 cost_submitted = st.form_submit_button("Save")
 
                 if cost_submitted:
                     tz_eat = tz("Africa/Nairobi")
-                    timestamp = datetime.datetime.now(tz_eat).strftime("%d-%b-%Y %H:%M:%S EAT")
+                    timestamp = datetime.datetime.now(tz_eat).strftime(
+                        "%d-%b-%Y %H:%M:%S EAT"
+                    )
 
                     data = [
                         timestamp,
@@ -265,7 +318,9 @@ if authentication_status:
     # ===================== SALES =====================
     elif nav_bar == "Sales":
         customers_list = cusfx.load_customers()
-        sales_details, sales_dashboard, sales_form = st.tabs(["📝 Details", "💰 Dashboard", "📜 Form"])
+        sales_details, sales_dashboard, sales_form = st.tabs(
+            ["📝 Details", "💰 Dashboard", "📜 Form"]
+        )
 
         final_sales_df = sfx.get_sales_df()
         final_sales_df = sfx.filter_data(final_sales_df, "years", years)
@@ -278,116 +333,411 @@ if authentication_status:
             with sales_details:
                 if final_sales_df.empty:
                     st.info("No records match the filtration criteria")
-                st.subheader("Sales by Customers")
-                df_customers = final_sales_df["Customer"].dropna().unique()
-                df_customers.sort()
-                for customer in df_customers:
-                    customer_df = sfx.process_customer(final_sales_df, customer)
-                    sfx.display_expander(customer, customer_df)
+                else:
+                    # Create a comprehensive sales overview
+                    st.subheader("📊 Sales Overview")
+
+                    # Summary metrics in columns
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        total_sales = len(final_sales_df)
+                        st.metric("Total Transactions", f"{total_sales:,}")
+                    with col2:
+                        total_revenue = pd.to_numeric(
+                            final_sales_df["Total Price"], errors="coerce"
+                        ).sum()
+                        st.metric("Total Revenue", f"{total_revenue:,.0f} UGX")
+                    with col3:
+                        total_quantity = pd.to_numeric(
+                            final_sales_df["Quantity"], errors="coerce"
+                        ).sum()
+                        st.metric("Total Quantity", f"{total_quantity:,.1f} kg")
+                    with col4:
+                        unique_customers = final_sales_df["Customer"].nunique()
+                        st.metric("Unique Customers", f"{unique_customers}")
+
+                    st.divider()
+
+                    # Prepare the sales data for display
+                    display_df = final_sales_df.copy()
+
+                    # Sort by date (newest first)
+                    display_df = display_df.sort_values("Date", ascending=False)
+
+                    # Format the Date column for display
+                    display_df["Date"] = display_df["Date"].apply(
+                        lambda x: x.strftime("%d/%b/%Y") if pd.notnull(x) else ""
+                    )
+
+                    # Format numeric columns
+                    display_df["Unit Price"] = pd.to_numeric(
+                        display_df["Unit Price"], errors="coerce"
+                    ).apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else "0")
+                    display_df["Total Price"] = pd.to_numeric(
+                        display_df["Total Price"], errors="coerce"
+                    ).apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else "0")
+                    display_df["Quantity"] = pd.to_numeric(
+                        display_df["Quantity"], errors="coerce"
+                    ).apply(lambda x: f"{x:,.1f}" if pd.notnull(x) else "0")
+
+                    # Reset index and create a transaction number
+                    display_df = display_df.reset_index(drop=True)
+                    display_df.index += 1
+
+                    # Reorder columns for better presentation
+                    column_order = [
+                        "Date",
+                        "Customer",
+                        "Size",
+                        "Quantity",
+                        "Unit",
+                        "Unit Price",
+                        "Total Price",
+                    ]
+                    display_df = display_df[column_order]
+
+                    st.subheader("🔄 All Sales Transactions (Latest First)")
+
+                    # Display the table with better formatting
+                    st.dataframe(
+                        display_df,
+                        use_container_width=True,
+                        column_config={
+                            "Date": st.column_config.TextColumn(
+                                "📅 Date", width="small"
+                            ),
+                            "Customer": st.column_config.TextColumn(
+                                "👤 Customer", width="medium"
+                            ),
+                            "Size": st.column_config.TextColumn(
+                                "📏 Size", width="small"
+                            ),
+                            "Quantity": st.column_config.TextColumn(
+                                "⚖️ Quantity", width="small"
+                            ),
+                            "Unit": st.column_config.TextColumn(
+                                "📦 Unit", width="small"
+                            ),
+                            "Unit Price": st.column_config.TextColumn(
+                                "💰 Unit Price (UGX)", width="small"
+                            ),
+                            "Total Price": st.column_config.TextColumn(
+                                "💵 Total (UGX)", width="small"
+                            ),
+                        },
+                        height=600,
+                    )
 
             chart_color = "#D4A017"
+            chart_color_light = "#F4E4B8"  # Lighter version for better elegance
+            chart_color_dark = "#B8860B"  # Darker version for contrast
+
             with sales_dashboard:
-                # KPIs
-                ttl_revenue, avg_sale_price, ttl_quantity, avg_order_qty = st.columns(4)
-                with ttl_revenue:
-                    total_revenue = float(final_sales_df["Total Price"].sum()) if not final_sales_df.empty else 0.0
-                    st.metric("Total Sales (UGX)", f"{total_revenue:,.0f}")
-                with avg_sale_price:
-                    avg_sale_price_val = float(final_sales_df["Unit Price"].mean()) if not final_sales_df.empty else 0.0
-                    st.metric("Average Sale Price", f"{avg_sale_price_val:,.0f} UGX")
-                with ttl_quantity:
-                    total_quantity = float(final_sales_df["Quantity"].sum()) if not final_sales_df.empty else 0.0
-                    st.metric("Quantity Sold", f"{total_quantity:,.0f} kgs")
-                with avg_order_qty:
-                    avg_quantity = float(final_sales_df["Quantity"].mean()) if not final_sales_df.empty else 0.0
-                    st.metric("Average Order Quantity", f"{avg_quantity:,.0f} kgs")
+                if final_sales_df.empty:
+                    st.info("No sales data available for the selected filters")
+                else:
+                    # Enhanced KPIs Section
 
-                st.write("")
-                visuals_df = pd.DataFrame({
-                    "Quantity Sold (kgs)": final_sales_df["Quantity"],
-                    "Revenue (ugx)": final_sales_df["Total Price"],
-                    "Date": final_sales_df["Date"],
-                })
-
-                # Row 1: Revenue trend
-                row1_col1, row1_col2 = st.columns(2)
-                with row1_col1:
-                    st.subheader("📈 Revenue Trend")
-                    chart_height = 5 * 50
-                    area = (
-                        alt.Chart(visuals_df)
-                        .mark_area(interpolate="monotone", opacity=0.2, color=chart_color)
-                        .encode(
-                            x=alt.X("month(Date):O", axis=alt.Axis(grid=False)),
-                            y=alt.Y("sum(Revenue (ugx)):Q", axis=alt.Axis(grid=False)),
-                        )
+                    # Add custom CSS to reduce metric font sizes
+                    st.markdown(
+                        """
+                    <style>
+                    div[data-testid="metric-container"] > div[data-testid="metric"] > div > div {
+                        font-size: 1.2rem !important;
+                    }
+                    </style>
+                    """,
+                        unsafe_allow_html=True,
                     )
-                    line = (
-                        alt.Chart(visuals_df)
-                        .mark_line(interpolate="monotone", color=chart_color, strokeWidth=2)
-                        .encode(
-                            x=alt.X("month(Date):O", axis=alt.Axis(grid=False)),
-                            y=alt.Y("sum(Revenue (ugx)):Q", axis=alt.Axis(grid=False)),
-                            tooltip=[
-                                alt.Tooltip("month(Date):O", title="Month"),
-                                alt.Tooltip("sum(Revenue (ugx)):Q", title="Total Revenue", format=","),
-                            ],
-                        )
-                    )
-                    points = line.mark_point(size=50, color=chart_color)
-                    st.altair_chart((area + line + points).properties(height=chart_height), use_container_width=True)
 
-                with row1_col2:
-                    st.subheader("📊 Quantity Sold by Month")
-                    bar_qty = (
-                        alt.Chart(visuals_df)
-                        .mark_bar(color=chart_color, size=20)
-                        .encode(
-                            x=alt.X("month(Date):O", scale=alt.Scale(paddingInner=0.4)),
-                            y="sum(Quantity Sold (kgs)):Q",
-                            tooltip=[
-                                alt.Tooltip("month(Date):O", title="Month"),
-                                alt.Tooltip("sum(Quantity Sold (kgs)):Q", title="Total Kgs", format=","),
-                            ],
-                        )
-                    ).properties(height=chart_height)
-                    st.altair_chart(bar_qty, use_container_width=True)
+                    # Primary KPIs - Row 1
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        total_revenue = pd.to_numeric(
+                            final_sales_df["Total Price"], errors="coerce"
+                        ).sum()
+                        st.metric("💰 Total Revenue", f"{total_revenue:,.0f} UGX")
 
-                st.write("")
-                # Row 2: Top 5 + Table
-                row2_col1, row2_col2 = st.columns(2)
-                with row2_col1:
-                    st.subheader("🏆 Top 5 Customers")
-                    top5 = (
-                        final_sales_df.groupby("Customer")["Total Price"]
-                        .sum()
-                        .nlargest(5)
-                        .reset_index()
-                    )
-                    bar_top5 = (
-                        alt.Chart(top5)
-                        .mark_bar(cornerRadiusTopLeft=3, cornerRadiusBottomLeft=3, size=20)
-                        .encode(
-                            x=alt.X("Total Price:Q", title="Sales"),
-                            y=alt.Y("Customer:N", sort="-x", title="", scale=alt.Scale(paddingInner=0.4)),
-                            tooltip=[
-                                alt.Tooltip("Customer:N", title="Customer"),
-                                alt.Tooltip("Total Price:Q", title="Total Sales", format=","),
-                            ],
-                        )
-                        .properties(height=top5.shape[0] * 50)
-                        .configure_mark(color=chart_color)
-                    )
-                    st.altair_chart(bar_top5, use_container_width=True)
+                    with col2:
+                        total_transactions = len(final_sales_df)
+                        st.metric("🧾 Total Transactions", f"{total_transactions:,}")
 
-                with row2_col2:
-                    st.subheader("🗂️ Raw Data")
-                    df_display = final_sales_df[["Date", "Customer", "Unit Price", "Quantity", "Total Price"]].copy()
-                    df_display["Date"] = pd.to_datetime(df_display["Date"]).dt.date
-                    df_display = df_display.sort_values("Date", ascending=False).reset_index(drop=True)
-                    df_display.index = df_display.index + 1
-                    df_display.index.name = "No."
-                    st.dataframe(df_display, use_container_width=True)
+                    with col3:
+                        total_quantity = pd.to_numeric(
+                            final_sales_df["Quantity"], errors="coerce"
+                        ).sum()
+                        st.metric("⚖️ Total Quantity", f"{total_quantity:,.1f} kg")
+
+                    with col4:
+                        unique_customers = final_sales_df["Customer"].nunique()
+                        st.metric("👥 Active Customers", f"{unique_customers}")
+
+                    # Secondary KPIs - Row 2
+                    col5, col6, col7, col8 = st.columns(4)
+                    with col5:
+                        avg_order_value = (
+                            total_revenue / total_transactions
+                            if total_transactions > 0
+                            else 0
+                        )
+                        st.metric("📊 Avg Order Value", f"{avg_order_value:,.0f} UGX")
+
+                    with col6:
+                        avg_unit_price = pd.to_numeric(
+                            final_sales_df["Unit Price"], errors="coerce"
+                        ).mean()
+                        st.metric("🏷️ Avg Unit Price", f"{avg_unit_price:,.0f} UGX/kg")
+
+                    with col7:
+                        avg_quantity_per_order = (
+                            total_quantity / total_transactions
+                            if total_transactions > 0
+                            else 0
+                        )
+                        st.metric(
+                            "📦 Avg Order Size", f"{avg_quantity_per_order:.1f} kg"
+                        )
+
+                    with col8:
+                        avg_customer_value = (
+                            total_revenue / unique_customers
+                            if unique_customers > 0
+                            else 0
+                        )
+                        st.metric(
+                            "💎 Avg Customer Value", f"{avg_customer_value:,.0f} UGX"
+                        )
+
+                    # Performance Insights Section - Moved right after KPIs
+                    st.divider()
+                    st.subheader("🎯 Performance Insights")
+
+                    # Prepare data for insights calculations
+                    visuals_df = final_sales_df.copy()
+                    visuals_df["Revenue"] = pd.to_numeric(
+                        visuals_df["Total Price"], errors="coerce"
+                    )
+                    visuals_df["Quantity"] = pd.to_numeric(
+                        visuals_df["Quantity"], errors="coerce"
+                    )
+                    visuals_df["Date"] = pd.to_datetime(visuals_df["Date"])
+
+                    insight_col1, insight_col2 = st.columns(2)
+
+                    with insight_col1:
+                        # Best performing month
+                        monthly_perf = visuals_df.groupby(
+                            visuals_df["Date"].dt.strftime("%B %Y")
+                        )["Revenue"].sum()
+                        best_month = (
+                            monthly_perf.idxmax() if not monthly_perf.empty else "N/A"
+                        )
+                        best_month_value = (
+                            monthly_perf.max() if not monthly_perf.empty else 0
+                        )
+
+                        st.info(
+                            f"""
+                        **🏆 Best Month**  
+                        {best_month}  
+                        Revenue: {best_month_value:,.0f} UGX
+                        """
+                        )
+
+                    with insight_col2:
+                        # Worst performing month
+                        worst_month = (
+                            monthly_perf.idxmin() if not monthly_perf.empty else "N/A"
+                        )
+                        worst_month_value = (
+                            monthly_perf.min() if not monthly_perf.empty else 0
+                        )
+
+                        st.warning(
+                            f"""
+                        **📉 Worst Month**  
+                        {worst_month}  
+                        Revenue: {worst_month_value:,.0f} UGX
+                        """
+                        )
+
+                    st.divider()
+
+                    # Prepare data for visualizations
+
+                    # Analytics Section
+                    st.subheader("📈 Sales Analytics")
+
+                    # Row 1: Time-based Analysis
+                    row1_col1, row1_col2 = st.columns(2)
+
+                    with row1_col1:
+                        st.markdown("**📅 Revenue by Month**")
+                        monthly_revenue = (
+                            visuals_df.groupby(visuals_df["Date"].dt.to_period("M"))[
+                                "Revenue"
+                            ]
+                            .sum()
+                            .reset_index()
+                        )
+                        monthly_revenue["Date"] = monthly_revenue["Date"].astype(str)
+
+                        area_chart = (
+                            alt.Chart(monthly_revenue)
+                            .mark_area(
+                                interpolate="monotone",
+                                opacity=0.3,
+                                color=chart_color,
+                                line={"color": chart_color_dark, "strokeWidth": 3},
+                            )
+                            .encode(
+                                x=alt.X(
+                                    "Date:O",
+                                    title="Month",
+                                    axis=alt.Axis(grid=False, labelAngle=-45),
+                                ),
+                                y=alt.Y(
+                                    "Revenue:Q",
+                                    title="Revenue (UGX)",
+                                    axis=alt.Axis(grid=False, format=".2s"),
+                                ),
+                                tooltip=[
+                                    alt.Tooltip("Date:O", title="Month"),
+                                    alt.Tooltip(
+                                        "Revenue:Q", title="Revenue", format=",.0f"
+                                    ),
+                                ],
+                            )
+                            .properties(height=300)
+                        )
+
+                        st.altair_chart(area_chart, use_container_width=True)
+
+                    with row1_col2:
+                        st.markdown("**📊 Daily Sales Performance**")
+                        daily_sales = (
+                            visuals_df.groupby(visuals_df["Date"].dt.date)
+                            .agg({"Revenue": "sum", "Quantity": "sum"})
+                            .reset_index()
+                        )
+                        daily_sales = daily_sales.tail(30)  # Last 30 days
+
+                        daily_chart = (
+                            alt.Chart(daily_sales)
+                            .mark_bar(
+                                color=chart_color,
+                                cornerRadiusTopLeft=3,
+                                cornerRadiusTopRight=3,
+                            )
+                            .encode(
+                                x=alt.X(
+                                    "Date:T",
+                                    title="Date",
+                                    axis=alt.Axis(grid=False, format="%d/%m"),
+                                ),
+                                y=alt.Y(
+                                    "Revenue:Q",
+                                    title="Daily Revenue",
+                                    axis=alt.Axis(grid=False, format=".2s"),
+                                ),
+                                tooltip=[
+                                    alt.Tooltip(
+                                        "Date:T", title="Date", format="%d/%b/%Y"
+                                    ),
+                                    alt.Tooltip(
+                                        "Revenue:Q", title="Revenue", format=",.0f"
+                                    ),
+                                    alt.Tooltip(
+                                        "Quantity:Q", title="Quantity", format=",.1f"
+                                    ),
+                                ],
+                            )
+                            .properties(height=300)
+                        )
+
+                        st.altair_chart(daily_chart, use_container_width=True)
+
+                    # Row 2: Customer and Product Analysis
+                    row2_col1, row2_col2 = st.columns(2)
+
+                    with row2_col1:
+                        st.markdown("**🏆 Top 10 Customers by Revenue**")
+                        top_customers = (
+                            visuals_df.groupby("Customer")["Revenue"]
+                            .sum()
+                            .nlargest(10)
+                            .reset_index()
+                        )
+
+                        customer_chart = (
+                            alt.Chart(top_customers)
+                            .mark_bar(
+                                color=chart_color,
+                                cornerRadiusTopLeft=5,
+                                cornerRadiusBottomLeft=5,
+                            )
+                            .encode(
+                                x=alt.X(
+                                    "Revenue:Q",
+                                    title="Revenue (UGX)",
+                                    axis=alt.Axis(format=".2s"),
+                                ),
+                                y=alt.Y(
+                                    "Customer:N",
+                                    sort="-x",
+                                    title="",
+                                    axis=alt.Axis(labelLimit=100),
+                                ),
+                                tooltip=[
+                                    alt.Tooltip("Customer:N", title="Customer"),
+                                    alt.Tooltip(
+                                        "Revenue:Q",
+                                        title="Total Revenue",
+                                        format=",.0f",
+                                    ),
+                                ],
+                            )
+                            .properties(height=400)
+                        )
+
+                        st.altair_chart(customer_chart, use_container_width=True)
+
+                    with row2_col2:
+                        st.markdown("**🏆 Customer Performance Summary**")
+                        # Create a summary table of customer metrics
+                        customer_metrics = (
+                            visuals_df.groupby("Customer")
+                            .agg(
+                                {"Revenue": ["sum", "count", "mean"], "Quantity": "sum"}
+                            )
+                            .round(1)
+                        )
+
+                        # Flatten column names
+                        customer_metrics.columns = [
+                            "Total Revenue",
+                            "Transactions",
+                            "Avg Order Value",
+                            "Total Quantity",
+                        ]
+                        customer_metrics = customer_metrics.sort_values(
+                            "Total Revenue", ascending=False
+                        ).head(8)
+
+                        # Format for display
+                        customer_metrics["Total Revenue"] = customer_metrics[
+                            "Total Revenue"
+                        ].apply(lambda x: f"{x:,.0f}")
+                        customer_metrics["Avg Order Value"] = customer_metrics[
+                            "Avg Order Value"
+                        ].apply(lambda x: f"{x:,.0f}")
+                        customer_metrics["Total Quantity"] = customer_metrics[
+                            "Total Quantity"
+                        ].apply(lambda x: f"{x:.1f}")
+
+                        st.dataframe(
+                            customer_metrics, use_container_width=True, height=350
+                        )
 
         with sales_form:
             st.title(":green[Sales]")
@@ -407,55 +757,206 @@ if authentication_status:
                     )
                 with x2:
                     customer = st.selectbox(
-                        label="Customer", options=customers_list, placeholder="Select Customer", index=None
+                        label="Customer",
+                        options=customers_list,
+                        placeholder="Select Customer",
+                        index=None,
                     )
                 with x3:
                     size = st.selectbox(label="Size", options=sfx.get_sizes())
                 with x4:
                     unit = st.selectbox(label="Unit", options=sfx.get_units())
                 with x5:
-                    quantity = st.text_input(value=1, key="quantity", placeholder="0", label="Quantity")
+                    quantity = st.text_input(
+                        value=1, key="quantity", placeholder="0", label="Quantity"
+                    )
                 with x6:
-                    unit_price = st.text_input(value=1, key="unit-price", placeholder="ugx", label="Unit Price")
+                    unit_price = st.text_input(
+                        value=1, key="unit_price", placeholder="0", label="Unit Price"
+                    )
                 with x7:
-                    total_price = st.number_input(label="Total Price", disabled=True, value=calculate_total_price())
+                    total_price = st.text_input(
+                        value=1, key="total_price", placeholder="0", label="Total Price"
+                    )
                 with x8:
-                    amount_paid = st.text_input(key="amount_paid", placeholder="0", label="Amount Paid")
+                    pass  # Empty column
 
-                delivery_fee = st.text_input(key="delivery", placeholder="0", label="Delivery Fee")
+                submitted = st.form_submit_button("Submit")
+                if submitted:
+                    if customer and size and unit:
+                        # Prepare the data
+                        sale_data = {
+                            "date": date,
+                            "customer": customer,
+                            "size": size,
+                            "unit": unit,
+                            "quantity": float(quantity),
+                            "unit price": float(unit_price),
+                            "total price": float(total_price),
+                        }
 
-                sale_submitted = st.form_submit_button("Save", on_click=calculate_total_price)
-
-                if sale_submitted:
-                    tz_eat = tz("Africa/Nairobi")
-                    timestamp = datetime.datetime.now(tz_eat).strftime("%d-%b-%Y %H:%M:%S EAT")
-
-                    data = [
-                        timestamp,
-                        date.strftime("%d/%m/%y"),
-                        customer,
-                        size,
-                        unit,
-                        unit_price,
-                        quantity,
-                        st.session_state["total-price"],
-                        "payment_status is being dropped",
-                        amount_paid,
-                        delivery_fee,
-                        current_user,
-                    ]
-
-                    with st.spinner("Saving sale data..."):
-                        pepper_workbook = gc.open_by_url(st.secrets["sales_sheet_key"])
-                        sales_sheet = pepper_workbook.worksheet("Final Sales")
+                        # Write to Google Sheets
+                        pepper_workbook = gc.open_by_key(st.secrets["sheet_key"])
+                        sales_sheet = pepper_workbook.worksheet("sales")
                         next_row_index = len(sales_sheet.get_all_values()) + 1
-                        sales_sheet.append_rows(
-                            [data],
-                            value_input_option="user_entered",
-                            insert_data_option="insert_rows",
+                        set_with_dataframe(
+                            sales_sheet,
+                            pd.DataFrame([sale_data]),
+                            include_column_header=False,
+                            include_index=False,
                             table_range=f"a{next_row_index}",
                         )
                         st.success("✅ Sale saved Successfully")
+
+    # ===================== CUSTOMERS =====================
+    elif nav_bar == "Customers":
+        st.title("👥 Customer Management")
+
+        # Get sales data for customer analysis
+        final_sales_df = sfx.get_sales_df()
+        final_sales_df = sfx.filter_data(final_sales_df, "years", years)
+        final_sales_df = sfx.filter_data(final_sales_df, "months", months)
+        final_sales_df = sfx.filter_data(final_sales_df, "customers", customers)
+        final_sales_df = sfx.filter_data(final_sales_df, "start_date", start_date)
+        final_sales_df = sfx.filter_data(final_sales_df, "end_date", end_date)
+
+        if final_sales_df.empty:
+            st.info("No customer data available for the selected filters")
+        else:
+            # Customer Overview Metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                total_customers = final_sales_df["Customer"].nunique()
+                st.metric("Total Customers", f"{total_customers}")
+            with col2:
+                avg_customer_value = (
+                    pd.to_numeric(final_sales_df["Total Price"], errors="coerce")
+                    .groupby(final_sales_df["Customer"])
+                    .sum()
+                    .mean()
+                )
+                st.metric("Avg Customer Value", f"{avg_customer_value:,.0f} UGX")
+            with col3:
+                customer_totals = (
+                    pd.to_numeric(final_sales_df["Total Price"], errors="coerce")
+                    .groupby(final_sales_df["Customer"])
+                    .sum()
+                )
+                top_customer_value = customer_totals.max()
+                top_customer_name = customer_totals.idxmax()
+                st.metric(
+                    "Top Customer Value",
+                    f"{top_customer_value:,.0f} UGX",
+                    delta=f"{top_customer_name}",
+                )
+            with col4:
+                avg_transactions = final_sales_df.groupby("Customer").size().mean()
+                st.metric("Avg Transactions/Customer", f"{avg_transactions:.1f}")
+
+            st.divider()
+
+            # Customer Summary Table
+            st.subheader("👥 Customer Summary & Analytics")
+
+            # Group by customer and create comprehensive summary
+            customer_summary = (
+                final_sales_df.groupby("Customer")
+                .agg(
+                    {
+                        "Quantity": lambda x: pd.to_numeric(x, errors="coerce").sum(),
+                        "Total Price": lambda x: pd.to_numeric(
+                            x, errors="coerce"
+                        ).sum(),
+                        "Date": [
+                            "count",
+                            "min",
+                            "max",
+                        ],  # Number of transactions, first purchase, last purchase
+                    }
+                )
+                .round(1)
+            )
+
+            # Flatten column names
+            customer_summary.columns = [
+                "Total Quantity (kg)",
+                "Total Revenue (UGX)",
+                "Transactions",
+                "First Purchase",
+                "Last Purchase",
+            ]
+
+            # Format the data
+            customer_summary = customer_summary.sort_values(
+                "Total Revenue (UGX)", ascending=False
+            )
+            customer_summary["Total Revenue (UGX)"] = customer_summary[
+                "Total Revenue (UGX)"
+            ].apply(lambda x: f"{x:,.0f}")
+            customer_summary["Total Quantity (kg)"] = customer_summary[
+                "Total Quantity (kg)"
+            ].apply(lambda x: f"{x:,.1f}")
+
+            # Format dates
+            customer_summary["First Purchase"] = pd.to_datetime(
+                customer_summary["First Purchase"]
+            ).dt.strftime("%d/%b/%Y")
+            customer_summary["Last Purchase"] = pd.to_datetime(
+                customer_summary["Last Purchase"]
+            ).dt.strftime("%d/%b/%Y")
+
+            # Calculate average order value
+            temp_df = final_sales_df.groupby("Customer").agg(
+                {
+                    "Total Price": lambda x: pd.to_numeric(x, errors="coerce").sum(),
+                    "Date": "count",
+                }
+            )
+            avg_order_value = (temp_df["Total Price"] / temp_df["Date"]).round(0)
+            customer_summary["Avg Order Value (UGX)"] = avg_order_value.apply(
+                lambda x: f"{x:,.0f}"
+            )
+
+            # Reorder columns for better presentation
+            column_order = [
+                "Total Revenue (UGX)",
+                "Transactions",
+                "Avg Order Value (UGX)",
+                "Total Quantity (kg)",
+                "First Purchase",
+                "Last Purchase",
+            ]
+            customer_summary = customer_summary[column_order]
+
+            st.dataframe(
+                customer_summary,
+                use_container_width=True,
+                column_config={
+                    "Total Revenue (UGX)": st.column_config.TextColumn(
+                        "💰 Total Revenue", width="medium"
+                    ),
+                    "Transactions": st.column_config.NumberColumn(
+                        "🔢 Transactions", width="small"
+                    ),
+                    "Avg Order Value (UGX)": st.column_config.TextColumn(
+                        "📊 Avg Order Value", width="medium"
+                    ),
+                    "Total Quantity (kg)": st.column_config.TextColumn(
+                        "⚖️ Total Quantity", width="medium"
+                    ),
+                    "First Purchase": st.column_config.TextColumn(
+                        "🗓️ First Purchase", width="medium"
+                    ),
+                    "Last Purchase": st.column_config.TextColumn(
+                        "📅 Last Purchase", width="medium"
+                    ),
+                },
+                height=500,
+            )
+
+            st.info(
+                "💡 **Future Features**: Customer contact management, loyalty programs, and detailed purchase history will be added here."
+            )
 
     # ===================== DEPOSITS =====================
     elif nav_bar == "Deposits":
@@ -471,7 +972,11 @@ if authentication_status:
             with deposits:
                 if deposits_df.empty:
                     st.info("No records match the filtration criteria")
-                unique_months_list = deposits_df["Date"].dt.month_name().unique().tolist()
+                # Sort months chronologically from newest to oldest
+                deposits_df_sorted = deposits_df.sort_values("Date", ascending=False)
+                unique_months_list = (
+                    deposits_df_sorted["Date"].dt.month_name().unique().tolist()
+                )
                 for month in unique_months_list:
                     month_df = dfx.process_deposit_month(deposits_df, month)
                     dfx.display_expander(month, month_df)
@@ -487,14 +992,22 @@ if authentication_status:
                     min_value=datetime.date(2022, 8, 1),
                     help="Date **MUST** be before or equal to today",
                 )
-                amount = st.text_input(placeholder="ugx", label="Amount deposited", help="Enter a value > 0")
+                amount = st.text_input(
+                    placeholder="ugx",
+                    label="Amount deposited",
+                    help="Enter a value > 0",
+                )
 
-                st.info("Uploading an image of the deposit slip will come in the next release!")
+                st.info(
+                    "Uploading an image of the deposit slip will come in the next release!"
+                )
 
                 submitted = st.form_submit_button("Save")
                 if submitted:
                     tz_eat = tz("Africa/Nairobi")
-                    timestamp = datetime.datetime.now(tz_eat).strftime("%d-%b-%Y %H:%M:%S EAT")
+                    timestamp = datetime.datetime.now(tz_eat).strftime(
+                        "%d-%b-%Y %H:%M:%S EAT"
+                    )
 
                     data = [
                         timestamp,
@@ -513,7 +1026,9 @@ if authentication_status:
                             insert_data_option="insert_rows",
                             table_range=f"a{next_row_index}",
                         )
-                        st.success("✅ Deposit Saved Successfully. Feel free to close the application")
+                        st.success(
+                            "✅ Deposit Saved Successfully. Feel free to close the application"
+                        )
 
     # ===================== WITHDRAWS =====================
     elif nav_bar == "Withdraws":
@@ -528,11 +1043,15 @@ if authentication_status:
 
             with withdraws:
                 if withdraw_df.empty:
-                    st.info("No records match the filtration criteria")
-                unique_months_list = withdraw_df["Date"].dt.month_name().unique().tolist()
+                    st.info("No records match the filteration criteria")
+                # Sort months chronologically from newest to oldest
+                withdraw_df_sorted = withdraw_df.sort_values("Date", ascending=False)
+                unique_months_list = (
+                    withdraw_df_sorted["Date"].dt.month_name().unique().tolist()
+                )
                 for month in unique_months_list:
-                    month_df = dfx.process_deposit_month(withdraw_df, month)
-                    dfx.display_expander(month, month_df)
+                    month_df = wfx.process_withdraw_month(withdraw_df, month)
+                    wfx.display_expander(month, month_df)
 
             with withdraw_form:
                 st.title(":red[Withdraws]")
@@ -545,13 +1064,21 @@ if authentication_status:
                         min_value=datetime.date(2022, 8, 1),
                         help="Date **MUST** be before or equal to today",
                     )
-                    amount = st.text_input(placeholder="ugx", label="Amount withdrawn", help="Enter a value > 0")
-                    reason_for_withdraw = st.text_input(placeholder="reason for withdraw", label="Reason for Withdraw")
+                    amount = st.text_input(
+                        placeholder="ugx",
+                        label="Amount withdrawn",
+                        help="Enter a value > 0",
+                    )
+                    reason_for_withdraw = st.text_input(
+                        placeholder="reason for withdraw", label="Reason for Withdraw"
+                    )
 
                     submitted = st.form_submit_button("Save")
                     if submitted:
                         tz_eat = tz("Africa/Nairobi")
-                        timestamp = datetime.datetime.now(tz_eat).strftime("%d-%b-%Y %H:%M:%S EAT")
+                        timestamp = datetime.datetime.now(tz_eat).strftime(
+                            "%d-%b-%Y %H:%M:%S EAT"
+                        )
 
                         data = [
                             timestamp,
@@ -571,7 +1098,9 @@ if authentication_status:
                                 insert_data_option="insert_rows",
                                 table_range=f"a{next_row_index}",
                             )
-                            st.success("✅ Withdraw Saved Successfully. Feel free to close the application")
+                            st.success(
+                                "✅ Withdraw Saved Successfully. Feel free to close the application"
+                            )
 
     # ===================== HARVESTS =====================
     elif nav_bar == "Harvests":
