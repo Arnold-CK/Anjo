@@ -767,196 +767,236 @@ if authentication_status:
                 with x4:
                     unit = st.selectbox(label="Unit", options=sfx.get_units())
                 with x5:
-                    quantity = st.text_input(
-                        value=1, key="quantity", placeholder="0", label="Quantity"
+                    quantity = st.number_input(
+                        label="Quantity",
+                        min_value=0.0,
+                        value=1.0,
+                        step=0.1,
+                        key="quantity_input"
                     )
                 with x6:
-                    unit_price = st.text_input(
-                        value=1, key="unit_price", placeholder="0", label="Unit Price"
+                    unit_price = st.number_input(
+                        label="Unit Price",
+                        min_value=0.0,
+                        value=0.0,
+                        step=100.0,
+                        key="unit_price_input"
                     )
                 with x7:
-                    total_price = st.text_input(
-                        value=1, key="total_price", placeholder="0", label="Total Price"
-                    )
+                    st.markdown("<div style='padding-top: 28px;'><small style='color: #888888;'>💡 Total price will be computed automatically based on quantity × unit price</small></div>", unsafe_allow_html=True)
                 with x8:
-                    pass  # Empty column
+                    amount_paid = st.number_input(
+                        label="Amount Paid by Customer",
+                        min_value=0.0,
+                        value=0.0,
+                        step=100.0,
+                        key="amount_paid_input"
+                    )
 
                 submitted = st.form_submit_button("Submit")
                 if submitted:
-                    if customer and size and unit:
-                        # Prepare the data
+                    if customer and size and unit and quantity > 0 and unit_price > 0:
+                        # Create timestamp in the required format
+                        tz_eat = tz("Africa/Nairobi")
+                        timestamp = datetime.datetime.now(tz_eat).strftime("%d-%b-%Y %H:%M:%S EAT")
+                        
+                        # Format date as dd/mm/yy
+                        formatted_date = date.strftime("%d/%m/%y")
+                        
+                        # Calculate total price
+                        calculated_total = quantity * unit_price
+                        
+                        # Prepare the data in the exact order required by the sheet
+                        # timestamp, date, customer, size, unit, unit price, quantity, total price, Payment Status, amount paid, transportation cost, entered by
                         sale_data = {
-                            "date": date,
+                            "timestamp": timestamp,
+                            "date": formatted_date,
                             "customer": customer,
                             "size": size,
                             "unit": unit,
-                            "quantity": float(quantity),
-                            "unit price": float(unit_price),
-                            "total price": float(total_price),
+                            "unit price": unit_price,
+                            "quantity": quantity,
+                            "total price": calculated_total,
+                            "Payment Status": "",  # Empty as requested
+                            "amount paid": amount_paid,
+                            "transportation cost": "",  # Empty as requested
+                            "entered by": current_user,
                         }
 
                         # Write to Google Sheets
-                        pepper_workbook = gc.open_by_key(st.secrets["sheet_key"])
-                        sales_sheet = pepper_workbook.worksheet("sales")
+                        pepper_workbook = gc.open_by_url(st.secrets["sales_sheet_key"])
+                        sales_sheet = pepper_workbook.worksheet("Final Sales")
                         next_row_index = len(sales_sheet.get_all_values()) + 1
                         set_with_dataframe(
                             sales_sheet,
                             pd.DataFrame([sale_data]),
+                            row=next_row_index,
                             include_column_header=False,
                             include_index=False,
-                            table_range=f"a{next_row_index}",
                         )
                         st.success("✅ Sale saved Successfully")
 
     # ===================== CUSTOMERS =====================
     elif nav_bar == "Customers":
         st.title("👥 Customer Management")
+        
+        # Create tabs for different customer operations
+        tab1, tab2, tab3 = st.tabs(["📊 Customer Analytics", "📋 Customer Directory", "➕ Add New Customer"])
+        
+        with tab1:
+            # Get sales data for customer analysis
+            final_sales_df = sfx.get_sales_df()
+            final_sales_df = sfx.filter_data(final_sales_df, "years", years)
+            final_sales_df = sfx.filter_data(final_sales_df, "months", months)
+            final_sales_df = sfx.filter_data(final_sales_df, "customers", customers)
+            final_sales_df = sfx.filter_data(final_sales_df, "start_date", start_date)
+            final_sales_df = sfx.filter_data(final_sales_df, "end_date", end_date)
 
-        # Get sales data for customer analysis
-        final_sales_df = sfx.get_sales_df()
-        final_sales_df = sfx.filter_data(final_sales_df, "years", years)
-        final_sales_df = sfx.filter_data(final_sales_df, "months", months)
-        final_sales_df = sfx.filter_data(final_sales_df, "customers", customers)
-        final_sales_df = sfx.filter_data(final_sales_df, "start_date", start_date)
-        final_sales_df = sfx.filter_data(final_sales_df, "end_date", end_date)
+            if final_sales_df.empty:
+                st.info("No customer data available for the selected filters")
+            else:
+                # Customer Overview Metrics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    total_customers = final_sales_df["Customer"].nunique()
+                    st.metric("Total Customers", f"{total_customers}")
+                with col2:
+                    avg_customer_value = (
+                        pd.to_numeric(final_sales_df["Total Price"], errors="coerce")
+                        .groupby(final_sales_df["Customer"])
+                        .sum()
+                        .mean()
+                    )
+                    st.metric("Avg Customer Value", f"{avg_customer_value:,.0f} UGX")
+                with col3:
+                    customer_totals = (
+                        pd.to_numeric(final_sales_df["Total Price"], errors="coerce")
+                        .groupby(final_sales_df["Customer"])
+                        .sum()
+                    )
+                    top_customer_value = customer_totals.max()
+                    top_customer_name = customer_totals.idxmax()
+                    st.metric(
+                        "Top Customer Value",
+                        f"{top_customer_value:,.0f} UGX",
+                        delta=f"{top_customer_name}",
+                    )
+                with col4:
+                    avg_transactions = final_sales_df.groupby("Customer").size().mean()
+                    st.metric("Avg Transactions/Customer", f"{avg_transactions:.1f}")
 
-        if final_sales_df.empty:
-            st.info("No customer data available for the selected filters")
-        else:
-            # Customer Overview Metrics
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                total_customers = final_sales_df["Customer"].nunique()
-                st.metric("Total Customers", f"{total_customers}")
-            with col2:
-                avg_customer_value = (
-                    pd.to_numeric(final_sales_df["Total Price"], errors="coerce")
-                    .groupby(final_sales_df["Customer"])
-                    .sum()
-                    .mean()
+                st.divider()
+
+                # Customer Summary Table
+                st.subheader("👥 Customer Summary & Analytics")
+
+                # Group by customer and create comprehensive summary
+                customer_summary = (
+                    final_sales_df.groupby("Customer")
+                    .agg(
+                        {
+                            "Quantity": lambda x: pd.to_numeric(x, errors="coerce").sum(),
+                            "Total Price": lambda x: pd.to_numeric(
+                                x, errors="coerce"
+                            ).sum(),
+                            "Date": [
+                                "count",
+                                "min",
+                                "max",
+                            ],  # Number of transactions, first purchase, last purchase
+                        }
+                    )
+                    .round(1)
                 )
-                st.metric("Avg Customer Value", f"{avg_customer_value:,.0f} UGX")
-            with col3:
-                customer_totals = (
-                    pd.to_numeric(final_sales_df["Total Price"], errors="coerce")
-                    .groupby(final_sales_df["Customer"])
-                    .sum()
+
+                # Flatten column names
+                customer_summary.columns = [
+                    "Total Quantity (kg)",
+                    "Total Revenue (UGX)",
+                    "Transactions",
+                    "First Purchase",
+                    "Last Purchase",
+                ]
+
+                # Format the data
+                customer_summary = customer_summary.sort_values(
+                    "Total Revenue (UGX)", ascending=False
                 )
-                top_customer_value = customer_totals.max()
-                top_customer_name = customer_totals.idxmax()
-                st.metric(
-                    "Top Customer Value",
-                    f"{top_customer_value:,.0f} UGX",
-                    delta=f"{top_customer_name}",
-                )
-            with col4:
-                avg_transactions = final_sales_df.groupby("Customer").size().mean()
-                st.metric("Avg Transactions/Customer", f"{avg_transactions:.1f}")
+                customer_summary["Total Revenue (UGX)"] = customer_summary[
+                    "Total Revenue (UGX)"
+                ].apply(lambda x: f"{x:,.0f}")
+                customer_summary["Total Quantity (kg)"] = customer_summary[
+                    "Total Quantity (kg)"
+                ].apply(lambda x: f"{x:,.1f}")
 
-            st.divider()
+                # Format dates
+                customer_summary["First Purchase"] = pd.to_datetime(
+                    customer_summary["First Purchase"]
+                ).dt.strftime("%d/%b/%Y")
+                customer_summary["Last Purchase"] = pd.to_datetime(
+                    customer_summary["Last Purchase"]
+                ).dt.strftime("%d/%b/%Y")
 
-            # Customer Summary Table
-            st.subheader("👥 Customer Summary & Analytics")
-
-            # Group by customer and create comprehensive summary
-            customer_summary = (
-                final_sales_df.groupby("Customer")
-                .agg(
+                # Calculate average order value
+                temp_df = final_sales_df.groupby("Customer").agg(
                     {
-                        "Quantity": lambda x: pd.to_numeric(x, errors="coerce").sum(),
-                        "Total Price": lambda x: pd.to_numeric(
-                            x, errors="coerce"
-                        ).sum(),
-                        "Date": [
-                            "count",
-                            "min",
-                            "max",
-                        ],  # Number of transactions, first purchase, last purchase
+                        "Total Price": lambda x: pd.to_numeric(x, errors="coerce").sum(),
+                        "Date": "count",
                     }
                 )
-                .round(1)
-            )
+                avg_order_value = (temp_df["Total Price"] / temp_df["Date"]).round(0)
+                customer_summary["Avg Order Value (UGX)"] = avg_order_value.apply(
+                    lambda x: f"{x:,.0f}"
+                )
 
-            # Flatten column names
-            customer_summary.columns = [
-                "Total Quantity (kg)",
-                "Total Revenue (UGX)",
-                "Transactions",
-                "First Purchase",
-                "Last Purchase",
-            ]
+                # Reorder columns for better presentation
+                column_order = [
+                    "Total Revenue (UGX)",
+                    "Transactions",
+                    "Avg Order Value (UGX)",
+                    "Total Quantity (kg)",
+                    "First Purchase",
+                    "Last Purchase",
+                ]
+                customer_summary = customer_summary[column_order]
 
-            # Format the data
-            customer_summary = customer_summary.sort_values(
-                "Total Revenue (UGX)", ascending=False
-            )
-            customer_summary["Total Revenue (UGX)"] = customer_summary[
-                "Total Revenue (UGX)"
-            ].apply(lambda x: f"{x:,.0f}")
-            customer_summary["Total Quantity (kg)"] = customer_summary[
-                "Total Quantity (kg)"
-            ].apply(lambda x: f"{x:,.1f}")
+                st.dataframe(
+                    customer_summary,
+                    use_container_width=True,
+                    column_config={
+                        "Total Revenue (UGX)": st.column_config.TextColumn(
+                            "💰 Total Revenue", width="medium"
+                        ),
+                        "Transactions": st.column_config.NumberColumn(
+                            "🔢 Transactions", width="small"
+                        ),
+                        "Avg Order Value (UGX)": st.column_config.TextColumn(
+                            "📊 Avg Order Value", width="medium"
+                        ),
+                        "Total Quantity (kg)": st.column_config.TextColumn(
+                            "⚖️ Total Quantity", width="medium"
+                        ),
+                        "First Purchase": st.column_config.TextColumn(
+                            "🗓️ First Purchase", width="medium"
+                        ),
+                        "Last Purchase": st.column_config.TextColumn(
+                            "📅 Last Purchase", width="medium"
+                        ),
+                    },
+                    height=500,
+                )
 
-            # Format dates
-            customer_summary["First Purchase"] = pd.to_datetime(
-                customer_summary["First Purchase"]
-            ).dt.strftime("%d/%b/%Y")
-            customer_summary["Last Purchase"] = pd.to_datetime(
-                customer_summary["Last Purchase"]
-            ).dt.strftime("%d/%b/%Y")
-
-            # Calculate average order value
-            temp_df = final_sales_df.groupby("Customer").agg(
-                {
-                    "Total Price": lambda x: pd.to_numeric(x, errors="coerce").sum(),
-                    "Date": "count",
-                }
-            )
-            avg_order_value = (temp_df["Total Price"] / temp_df["Date"]).round(0)
-            customer_summary["Avg Order Value (UGX)"] = avg_order_value.apply(
-                lambda x: f"{x:,.0f}"
-            )
-
-            # Reorder columns for better presentation
-            column_order = [
-                "Total Revenue (UGX)",
-                "Transactions",
-                "Avg Order Value (UGX)",
-                "Total Quantity (kg)",
-                "First Purchase",
-                "Last Purchase",
-            ]
-            customer_summary = customer_summary[column_order]
-
-            st.dataframe(
-                customer_summary,
-                use_container_width=True,
-                column_config={
-                    "Total Revenue (UGX)": st.column_config.TextColumn(
-                        "💰 Total Revenue", width="medium"
-                    ),
-                    "Transactions": st.column_config.NumberColumn(
-                        "🔢 Transactions", width="small"
-                    ),
-                    "Avg Order Value (UGX)": st.column_config.TextColumn(
-                        "📊 Avg Order Value", width="medium"
-                    ),
-                    "Total Quantity (kg)": st.column_config.TextColumn(
-                        "⚖️ Total Quantity", width="medium"
-                    ),
-                    "First Purchase": st.column_config.TextColumn(
-                        "🗓️ First Purchase", width="medium"
-                    ),
-                    "Last Purchase": st.column_config.TextColumn(
-                        "📅 Last Purchase", width="medium"
-                    ),
-                },
-                height=500,
-            )
-
-            st.info(
-                "💡 **Future Features**: Customer contact management, loyalty programs, and detailed purchase history will be added here."
-            )
+                st.info(
+                    "💡 **Future Features**: Customer contact management, loyalty programs, and detailed purchase history will be added here."
+                )
+        
+        with tab2:
+            # Display customers table
+            cusfx.display_customers_table()
+        
+        with tab3:
+            # Customer creation form
+            cusfx.create_customer_form()
 
     # ===================== DEPOSITS =====================
     elif nav_bar == "Deposits":
