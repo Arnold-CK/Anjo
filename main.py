@@ -139,6 +139,7 @@ if authentication_status:
                     category_df = cfx.process_category(expenses_df, category)
                     cfx.display_expander(category, category_df)
 
+        if current_user != "Victor Tindimwebwa":
             with dashboard:
                 visuals_df = pd.DataFrame(
                     {
@@ -428,10 +429,11 @@ if authentication_status:
                         height=600,
                     )
 
-            chart_color = "#D4A017"
-            chart_color_light = "#F4E4B8"  # Lighter version for better elegance
-            chart_color_dark = "#B8860B"  # Darker version for contrast
+        chart_color = "#D4A017"
+        chart_color_light = "#F4E4B8"  # Lighter version for better elegance
+        chart_color_dark = "#B8860B"  # Darker version for contrast
 
+        if current_user != "Victor Tindimwebwa":
             with sales_dashboard:
                 if final_sales_df.empty:
                     st.info("No sales data available for the selected filters")
@@ -1144,8 +1146,63 @@ if authentication_status:
 
     # ===================== HARVESTS =====================
     elif nav_bar == "Harvests":
-        harvests_df = hfx.get_harvests_df()
-        st.dataframe(harvests_df, use_container_width=True)
+        st.title("🌱 Harvest Management")
+        
+        # Load customers for the form
+        customers_list = cusfx.load_customers()
+        
+        # Create tabs for different harvest operations
+        tab1, tab2, tab3 = st.tabs(["📊 Overview", "📋 Harvest List", "➕ Add Harvest"])
+        
+        with tab1:
+            # Load combined data for overview
+            harvests_df = hfx.load_all_harvests_data()
+            detailed_df = hfx.load_new_harvests_data()
+            
+            # Apply filters to both datasets
+            if not harvests_df.empty:
+                harvests_df = hfx.filter_data(harvests_df, "years", years)
+                harvests_df = hfx.filter_data(harvests_df, "months", months)
+                harvests_df = hfx.filter_data(harvests_df, "customers", customers)
+                harvests_df = hfx.filter_data(harvests_df, "start_date", start_date)
+                harvests_df = hfx.filter_data(harvests_df, "end_date", end_date)
+            
+            if not detailed_df.empty:
+                detailed_df = hfx.filter_data(detailed_df, "years", years)
+                detailed_df = hfx.filter_data(detailed_df, "months", months)
+                detailed_df = hfx.filter_data(detailed_df, "customers", customers)
+                detailed_df = hfx.filter_data(detailed_df, "start_date", start_date)
+                detailed_df = hfx.filter_data(detailed_df, "end_date", end_date)
+            
+            # Display overview
+            hfx.display_harvests_overview(harvests_df, detailed_df)
+        
+        with tab2:
+            # Load combined data for list
+            harvests_df = hfx.load_all_harvests_data()
+            detailed_df = hfx.load_new_harvests_data()
+            
+            # Apply filters to both datasets
+            if not harvests_df.empty:
+                harvests_df = hfx.filter_data(harvests_df, "years", years)
+                harvests_df = hfx.filter_data(harvests_df, "months", months)
+                harvests_df = hfx.filter_data(harvests_df, "customers", customers)
+                harvests_df = hfx.filter_data(harvests_df, "start_date", start_date)
+                harvests_df = hfx.filter_data(harvests_df, "end_date", end_date)
+            
+            if not detailed_df.empty:
+                detailed_df = hfx.filter_data(detailed_df, "years", years)
+                detailed_df = hfx.filter_data(detailed_df, "months", months)
+                detailed_df = hfx.filter_data(detailed_df, "customers", customers)
+                detailed_df = hfx.filter_data(detailed_df, "start_date", start_date)
+                detailed_df = hfx.filter_data(detailed_df, "end_date", end_date)
+            
+            # Display list with line performance
+            hfx.display_harvests_list(harvests_df, detailed_df)
+        
+        with tab3:
+            # Display harvest form
+            hfx.create_harvest_form(current_user, customers_list)
 
     # ---- Logout ----
     authenticator.logout("Logout", "sidebar", key="unique_key")
