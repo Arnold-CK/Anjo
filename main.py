@@ -235,9 +235,9 @@ if authentication_status:
 
             with st.form(key="costs"):
                 c1, c2 = st.columns(2)
-                c3, c4 = st.columns(2)
-                c5, c6 = st.columns(2)
-                c7, c8 = st.columns(2)
+                c3, c6 = st.columns(2)
+                # c5, c6 = st.columns(2)
+                # c7, c8 = st.columns(2)
 
                 with c1:
                     date = st.date_input(
@@ -252,24 +252,24 @@ if authentication_status:
                         label="Category", index=None, options=cfx.get_cost_categories()
                     )
                 with c3:
-                    item = st.text_input(placeholder="airtime", label="Item")
-                with c4:
-                    cost_quantity = st.text_input(label="Quantity")
-                with c5:
-                    unit_cost = st.text_input(
-                        key="unit-cost", placeholder="ugx", label="Unit Cost"
-                    )
+                    narrative = st.text_input(label="Narrative *", help="Required: Brief description of the cost")
+                # with c4:
+                #     cost_quantity = st.text_input(label="Quantity")
+                # with c5:
+                #     unit_cost = st.text_input(
+                #         key="unit-cost", placeholder="ugx", label="Unit Cost"
+                #     )
                 with c6:
                     total_cost = st.text_input(placeholder="ugx", label="Total Cost")
-                with c7:
-                    transport_cost = st.text_input(
-                        placeholder="ugx", label="Transport Cost (if any)"
-                    )
-                with c8:
-                    transport_details = st.text_input(
-                        placeholder="eg: from seeta to farm",
-                        label="Transport Details (if any)",
-                    )
+                # with c7:
+                #     transport_cost = st.text_input(
+                #         placeholder="ugx", label="Transport Cost (if any)"
+                #     )
+                # with c8:
+                #     transport_details = st.text_input(
+                #         placeholder="eg: from seeta to farm",
+                #         label="Transport Details (if any)",
+                #     )
 
                 source_of_funds = st.selectbox(
                     "Source of Money",
@@ -283,38 +283,46 @@ if authentication_status:
                 cost_submitted = st.form_submit_button("Save")
 
                 if cost_submitted:
-                    tz_eat = tz("Africa/Nairobi")
-                    timestamp = datetime.datetime.now(tz_eat).strftime(
-                        "%d-%b-%Y %H:%M:%S EAT"
-                    )
-
-                    data = [
-                        timestamp,
-                        date.strftime("%d/%m/%y"),
-                        item,
-                        category,
-                        "",
-                        cost_quantity,
-                        "",
-                        unit_cost,
-                        total_cost,
-                        transport_cost,
-                        transport_details,
-                        source_of_funds,
-                        current_user,
-                    ]
-
-                    with st.spinner("Saving cost data..."):
-                        pepper_workbook = gc.open_by_key(st.secrets["cost_sheet_key"])
-                        costs_sheet = pepper_workbook.worksheet("Costs")
-                        next_row_index = len(costs_sheet.get_all_values()) + 1
-                        costs_sheet.append_rows(
-                            [data],
-                            value_input_option="user_entered",
-                            insert_data_option="insert_rows",
-                            table_range=f"a{next_row_index}",
+                    # Validate narrative is not empty
+                    if not narrative or narrative.strip() == "":
+                        st.error("❌ Narrative is required. Please provide a description of the cost.")
+                    elif not category:
+                        st.error("❌ Please select a category.")
+                    elif not total_cost or total_cost.strip() == "":
+                        st.error("❌ Total Cost is required.")
+                    else:
+                        tz_eat = tz("Africa/Nairobi")
+                        timestamp = datetime.datetime.now(tz_eat).strftime(
+                            "%d-%b-%Y %H:%M:%S EAT"
                         )
-                        st.success("✅ Cost saved Successfully")
+
+                        data = [
+                            timestamp,
+                            date.strftime("%d/%m/%y"),
+                            narrative,
+                            category,
+                            "",
+                            "",  # cost_quantity (commented out)
+                            "",
+                            "",  # unit_cost (commented out)
+                            total_cost,
+                            "",  # transport_cost (commented out)
+                            "",  # transport_details (commented out)
+                            source_of_funds,
+                            current_user,
+                        ]
+
+                        with st.spinner("Saving cost data..."):
+                            pepper_workbook = gc.open_by_key(st.secrets["cost_sheet_key"])
+                            costs_sheet = pepper_workbook.worksheet("Costs")
+                            next_row_index = len(costs_sheet.get_all_values()) + 1
+                            costs_sheet.append_rows(
+                                [data],
+                                value_input_option="user_entered",
+                                insert_data_option="insert_rows",
+                                table_range=f"a{next_row_index}",
+                            )
+                            st.success("✅ Cost saved Successfully")
 
     # ===================== SALES =====================
     elif nav_bar == "Sales":
