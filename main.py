@@ -141,94 +141,300 @@ if authentication_status:
 
         if current_user != "Victor Tindimwebwa":
             with dashboard:
-                visuals_df = pd.DataFrame(
-                    {
-                        "Category": expenses_df["Cost Category"],
-                        "Cost (ugx)": expenses_df["Total Cost"],
-                        "Date": expenses_df["Date"],
+                if expenses_df.empty:
+                    st.info("No cost data available for the selected filters")
+                else:
+                    # Prepare data for visualizations
+                    visuals_df = pd.DataFrame(
+                        {
+                            "Category": expenses_df["Cost Category"],
+                            "Cost": expenses_df["Total Cost"],
+                            "Date": expenses_df["Date"],
+                        }
+                    )
+
+                    # Add custom CSS to reduce metric font sizes
+                    st.markdown(
+                        """
+                    <style>
+                    div[data-testid="metric-container"] > div[data-testid="metric"] > div > div {
+                        font-size: 1.2rem !important;
                     }
-                )
-
-                cost_metrics, pie_chart = st.columns([1, 2])
-                with cost_metrics:
-                    total_costs = (
-                        float(visuals_df["Cost (ugx)"].sum())
-                        if not visuals_df.empty
-                        else 0.0
-                    )
-                    st.metric("Total Costs", millify(total_costs, precision=2))
-                    number_of_months = (
-                        visuals_df["Date"].dt.month.nunique()
-                        if not visuals_df.empty
-                        else 0
-                    )
-                    average_monthly_cost = (
-                        total_costs / number_of_months if number_of_months > 0 else 0
-                    )
-                    st.metric(
-                        "Average monthly Cost",
-                        millify(average_monthly_cost, precision=2),
+                    </style>
+                    """,
+                        unsafe_allow_html=True,
                     )
 
-                with pie_chart:
-                    pie = (
-                        alt.Chart(visuals_df)
-                        .mark_arc(innerRadius=80)
-                        .encode(
-                            theta="sum(Cost (ugx))",
-                            color="Category",
-                            tooltip=[
-                                alt.Tooltip("Category", title="Category"),
-                                alt.Tooltip(
-                                    "sum(Cost (ugx))",
-                                    title="Total Cost (UGX)",
-                                    format=",",
-                                ),
-                            ],
+                    # Primary KPIs - Row 1
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        total_costs = float(visuals_df["Cost"].sum()) if not visuals_df.empty else 0.0
+                        st.metric("💸 Total Costs", f"{total_costs:,.0f} UGX")
+
+                    with col2:
+                        total_transactions = len(visuals_df)
+                        st.metric("🧾 Total Transactions", f"{total_transactions:,}")
+
+                    with col3:
+                        unique_categories = visuals_df["Category"].nunique()
+                        st.metric("📂 Active Categories", f"{unique_categories}")
+
+                    with col4:
+                        number_of_months = visuals_df["Date"].dt.month.nunique() if not visuals_df.empty else 0
+                        st.metric("📅 Months Covered", f"{number_of_months}")
+
+                    # Secondary KPIs - Row 2
+                    col5, col6, col7, col8 = st.columns(4)
+                    with col5:
+                        average_monthly_cost = total_costs / number_of_months if number_of_months > 0 else 0
+                        st.metric("📊 Avg Monthly Cost", f"{average_monthly_cost:,.0f} UGX")
+
+                    with col6:
+                        avg_cost_per_transaction = total_costs / total_transactions if total_transactions > 0 else 0
+                        st.metric("💳 Avg per Transaction", f"{avg_cost_per_transaction:,.0f} UGX")
+
+                    with col7:
+                        number_of_weeks = (visuals_df["Date"].max() - visuals_df["Date"].min()).days // 7 if not visuals_df.empty else 0
+                        avg_weekly_cost = total_costs / number_of_weeks if number_of_weeks > 0 else 0
+                        st.metric("📈 Avg Weekly Cost", f"{avg_weekly_cost:,.0f} UGX")
+
+                    with col8:
+                        # Top category by cost
+                        top_category = visuals_df.groupby("Category")["Cost"].sum().idxmax() if not visuals_df.empty else "N/A"
+                        st.metric("🏆 Top Category", top_category)
+
+                    # Performance Insights Section
+                    st.divider()
+                    st.subheader("🎯 Cost Insights")
+
+                    insight_col1, insight_col2 = st.columns(2)
+
+                    with insight_col1:
+                        # Highest cost month
+                        monthly_costs = visuals_df.groupby(
+                            visuals_df["Date"].dt.strftime("%B %Y")
+                        )["Cost"].sum()
+                        highest_month = monthly_costs.idxmax() if not monthly_costs.empty else "N/A"
+                        highest_month_value = monthly_costs.max() if not monthly_costs.empty else 0
+
+                        st.warning(
+                            f"""
+                        **📈 Highest Cost Month**  
+                        {highest_month}  
+                        Cost: {highest_month_value:,.0f} UGX
+                        """
                         )
-                    )
-                    st.altair_chart(pie, use_container_width=True)
 
-                st.write("---")
+                    with insight_col2:
+                        # Lowest cost month
+                        lowest_month = monthly_costs.idxmin() if not monthly_costs.empty else "N/A"
+                        lowest_month_value = monthly_costs.min() if not monthly_costs.empty else 0
 
-                line = (
-                    alt.Chart(visuals_df)
-                    .mark_line()
-                    .encode(
-                        x=alt.X("month(Date):O", title="Month"),
-                        y=alt.Y("sum(Cost (ugx)):Q", title="Total Cost (UGX)"),
-                        tooltip=[
-                            alt.Tooltip("month(Date):O", title="Month"),
-                            alt.Tooltip(
-                                "sum(Cost (ugx)):Q",
-                                title="Total Cost (UGX)",
-                                format=",",
-                            ),
-                        ],
-                    )
-                )
-                points = line.mark_point()
-                st.altair_chart(line + points, use_container_width=True)
+                        st.success(
+                            f"""
+                        **📉 Lowest Cost Month**  
+                        {lowest_month}  
+                        Cost: {lowest_month_value:,.0f} UGX
+                        """
+                        )
 
-                stacked = (
-                    alt.Chart(visuals_df)
-                    .mark_bar()
-                    .encode(
-                        x=alt.X("month(Date):O", title="Month"),
-                        y=alt.Y("sum(Cost (ugx)):Q", title="Total Cost (UGX)"),
-                        color=alt.Color("Category:N"),
-                        tooltip=[
-                            alt.Tooltip("month(Date):O", title="Month"),
-                            alt.Tooltip("Category", title="Category"),
-                            alt.Tooltip(
-                                "sum(Cost (ugx)):Q",
-                                title="Total Cost (UGX)",
-                                format=",",
-                            ),
-                        ],
-                    )
-                )
-                st.altair_chart(stacked, use_container_width=True)
+                    st.divider()
+
+                    # Chart colors
+                    chart_color = "#DC143C"  # Crimson red for costs
+                    chart_color_dark = "#8B0000"  # Dark red
+                    chart_color_light = "#FFB6C1"  # Light pink
+
+                    # Analytics Section
+                    st.subheader("📊 Cost Analytics")
+
+                    # Row 1: Time-based Analysis
+                    row1_col1, row1_col2 = st.columns(2)
+
+                    with row1_col1:
+                        st.markdown("**📅 Costs by Month**")
+                        monthly_costs_df = (
+                            visuals_df.groupby(visuals_df["Date"].dt.to_period("M"))["Cost"]
+                            .sum()
+                            .reset_index()
+                        )
+                        monthly_costs_df["Date"] = monthly_costs_df["Date"].astype(str)
+
+                        area_chart = (
+                            alt.Chart(monthly_costs_df)
+                            .mark_area(
+                                interpolate="monotone",
+                                opacity=0.3,
+                                color=chart_color,
+                                line={"color": chart_color_dark, "strokeWidth": 3},
+                            )
+                            .encode(
+                                x=alt.X(
+                                    "Date:O",
+                                    title="Month",
+                                    axis=alt.Axis(grid=False, labelAngle=-45),
+                                ),
+                                y=alt.Y(
+                                    "Cost:Q",
+                                    title="Cost (UGX)",
+                                    axis=alt.Axis(grid=False, format=".2s"),
+                                ),
+                                tooltip=[
+                                    alt.Tooltip("Date:O", title="Month"),
+                                    alt.Tooltip("Cost:Q", title="Cost", format=",.0f"),
+                                ],
+                            )
+                            .properties(height=300)
+                        )
+
+                        st.altair_chart(area_chart, use_container_width=True)
+
+                    with row1_col2:
+                        st.markdown("**📊 Daily Cost Trend (Last 30 Days)**")
+                        daily_costs = (
+                            visuals_df.groupby(visuals_df["Date"].dt.date)["Cost"]
+                            .sum()
+                            .reset_index()
+                        )
+                        daily_costs = daily_costs.tail(30)  # Last 30 days
+
+                        daily_chart = (
+                            alt.Chart(daily_costs)
+                            .mark_bar(
+                                color=chart_color,
+                                cornerRadiusTopLeft=3,
+                                cornerRadiusTopRight=3,
+                            )
+                            .encode(
+                                x=alt.X(
+                                    "Date:T",
+                                    title="Date",
+                                    axis=alt.Axis(grid=False, format="%d/%m"),
+                                ),
+                                y=alt.Y(
+                                    "Cost:Q",
+                                    title="Daily Cost",
+                                    axis=alt.Axis(grid=False, format=".2s"),
+                                ),
+                                tooltip=[
+                                    alt.Tooltip("Date:T", title="Date", format="%d/%b/%Y"),
+                                    alt.Tooltip("Cost:Q", title="Cost", format=",.0f"),
+                                ],
+                            )
+                            .properties(height=300)
+                        )
+
+                        st.altair_chart(daily_chart, use_container_width=True)
+
+                    # Row 2: Category Analysis
+                    row2_col1, row2_col2 = st.columns(2)
+
+                    with row2_col1:
+                        st.markdown("**🏆 Top Categories by Cost**")
+                        top_categories = (
+                            visuals_df.groupby("Category")["Cost"]
+                            .sum()
+                            .nlargest(10)
+                            .reset_index()
+                        )
+
+                        category_chart = (
+                            alt.Chart(top_categories)
+                            .mark_bar(
+                                color=chart_color,
+                                cornerRadiusTopLeft=5,
+                                cornerRadiusBottomLeft=5,
+                            )
+                            .encode(
+                                x=alt.X(
+                                    "Cost:Q",
+                                    title="Total Cost (UGX)",
+                                    axis=alt.Axis(format=".2s"),
+                                ),
+                                y=alt.Y(
+                                    "Category:N",
+                                    sort="-x",
+                                    title="",
+                                    axis=alt.Axis(labelLimit=150),
+                                ),
+                                tooltip=[
+                                    alt.Tooltip("Category:N", title="Category"),
+                                    alt.Tooltip("Cost:Q", title="Total Cost", format=",.0f"),
+                                ],
+                            )
+                            .properties(height=400)
+                        )
+
+                        st.altair_chart(category_chart, use_container_width=True)
+
+                    with row2_col2:
+                        st.markdown("**📋 Category Performance Summary**")
+                        # Create a summary table of category metrics
+                        category_metrics = (
+                            visuals_df.groupby("Category")
+                            .agg({"Cost": ["sum", "count", "mean"]})
+                            .round(0)
+                        )
+
+                        # Flatten column names
+                        category_metrics.columns = [
+                            "Total Cost",
+                            "Transactions",
+                            "Avg per Transaction",
+                        ]
+                        category_metrics = category_metrics.sort_values(
+                            "Total Cost", ascending=False
+                        ).head(10)
+
+                        # Format for display
+                        category_metrics["Total Cost"] = category_metrics["Total Cost"].apply(
+                            lambda x: f"{x:,.0f}"
+                        )
+                        category_metrics["Avg per Transaction"] = category_metrics[
+                            "Avg per Transaction"
+                        ].apply(lambda x: f"{x:,.0f}")
+
+                        st.dataframe(category_metrics, use_container_width=True, height=350)
+
+                    # Row 3: Cost Distribution
+                    st.divider()
+                    st.markdown("**🥧 Cost Distribution by Category**")
+                    
+                    pie_col1, pie_col2 = st.columns([2, 1])
+                    
+                    with pie_col1:
+                        pie = (
+                            alt.Chart(visuals_df)
+                            .mark_arc(innerRadius=80)
+                            .encode(
+                                theta=alt.Theta("sum(Cost):Q", title="Cost"),
+                                color=alt.Color(
+                                    "Category:N",
+                                    legend=alt.Legend(orient="right", titleFontSize=12, labelLimit=150)
+                                ),
+                                tooltip=[
+                                    alt.Tooltip("Category:N", title="Category"),
+                                    alt.Tooltip("sum(Cost):Q", title="Total Cost", format=",.0f"),
+                                ],
+                            )
+                            .properties(height=350)
+                        )
+                        st.altair_chart(pie, use_container_width=True)
+                    
+                    with pie_col2:
+                        # Cost breakdown percentages
+                        st.markdown("**📊 Top 5 by %**")
+                        category_totals = visuals_df.groupby("Category")["Cost"].sum().sort_values(ascending=False)
+                        top_5_pct = category_totals.head(5)
+                        total_cost_sum = category_totals.sum()
+                        
+                        for cat, cost in top_5_pct.items():
+                            pct = (cost / total_cost_sum * 100) if total_cost_sum > 0 else 0
+                            st.metric(
+                                label=cat[:20] + "..." if len(cat) > 20 else cat,
+                                value=f"{pct:.1f}%",
+                                delta=f"{cost:,.0f} UGX"
+                            )
 
         with costs_form:
             st.title(":red[Costs]")
