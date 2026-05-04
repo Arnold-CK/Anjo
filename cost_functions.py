@@ -12,6 +12,7 @@ def get_cost_categories():
     categories = [
         "Airtime & Data",
         "Construction",
+        "Director's Expenses",
         # "Delivery To Customer",
         "Employee Benefits",
         "Fertilisers & Nutrients",
