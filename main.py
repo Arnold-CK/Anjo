@@ -7,7 +7,7 @@ import streamlit as st
 from gspread_dataframe import set_with_dataframe
 from millify import millify
 from pytz import timezone as tz
-from streamlit_option_menu import option_menu
+
 
 import cost_functions as cfx
 import customers_functions as cusfx
@@ -65,35 +65,22 @@ if authentication_status:
     # ---- Sidebar ----
 
     with st.sidebar:
-        # keep your lists
         options = ["Costs", "Sales", "Harvests", "Customers", "Deposits", "Withdraws"]
-        icons = [
-            "bar-chart-line",
-            "coin",
-            "flower3",
-            "people",
-            "node-plus",
-            "node-minus",
-        ]
 
-        # pick default index from session_state (safe fallback to 0)
         default_index = (
             options.index(st.session_state["nav_bar_selection"])
             if st.session_state.get("nav_bar_selection") in options
             else 0
         )
 
-        # ✅ Correct usage: menu_title is the 1st positional arg; no `key`, no `title=`
-        nav_bar = option_menu(
-            current_user,  # menu_title
-            options,  # options
-            icons=icons,  # optional
-            menu_icon="person-circle",
-            default_index=default_index,
-            # orientation="vertical"  # (optional) default is vertical in sidebar
+        st.markdown(f"### {current_user}")
+        nav_bar = st.radio(
+            "Navigation",
+            options,
+            index=default_index,
+            label_visibility="collapsed",
         )
 
-        # mirror into session_state so rest of your code reads a single source of truth
         st.session_state["nav_bar_selection"] = nav_bar
         st.session_state["nav_bar"] = nav_bar
 
